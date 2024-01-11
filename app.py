@@ -11,6 +11,7 @@ import re
 from flask_cors import CORS
 import psycopg2
 from psycopg2 import OperationalError
+from gevent.pywsgi import WSGIServer
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
@@ -188,7 +189,7 @@ def send_agent_message_crisp(response, session_id):
     api_url = f"https://api.crisp.chat/v1/website/{website_id}/conversation/{session_id}/message"
     # username = os.getenv("crisp_identifier")
     # password = os.getenv("crisp_key")
-    alert = "http://127.0.0.1:5000/edit"
+    # alert = "http://127.0.0.1:5000/edit"
     basic_auth_credentials = (username, password)
     headers = {
         'Content-Type': 'application/json',
@@ -261,7 +262,7 @@ def send_message_user(thread_openai_id, question):
 
             if api_response.status_code == 200:
                 api_data = api_response.json()
-                print("Message sent successfully!", api_data)
+                # print("Message sent successfully!", api_data)
                 
                 # Create a run after sending a message
                 create_run(thread_openai_id)
@@ -323,7 +324,7 @@ def create_run(thread_openai_id):
     if response.status_code == 200:
         data = response.json()
         run_id = data.get('id')
-        print("Run created successfully!", run_id)
+        # print("Run created successfully!", run_id)
         check_run_status(thread_openai_id, run_id)
     
 
@@ -351,7 +352,7 @@ def retrieve_ai_response(thread_openai_id):
                 print("API Response:", data)  # Add this line to print the entire response
                 if 'data' in data and data['data']:
                     ai_response = data['data'][0]['content'][0]['text']['value']
-                    print("Retrieved response successfully!", ai_response)
+                    # print("Retrieved response successfully!", ai_response)
                     return ai_response
                 else:
                     print("No messages found in the response.")
@@ -460,8 +461,8 @@ def query_with_caching(question):
 #         except psycopg2.Error as e:
 #             print(f"Error closing the database connection: {e}")
 
-first_question = 'What is your name?'
-second_question = 'What is your phone number?'
+# first_question = 'What is your name?'
+# second_question = 'What is your phone number?'
 
 # Modify patch_profile to accept nickname and phone_number as arguments
 def patch_profile(nickname, phone_number, session_id):
@@ -536,7 +537,7 @@ def check_conversation(session_id):
                 found_name_question = True
             elif found_name_question and item.get("from") == "user":
                 user_content_after_name = item["content"]
-                print("User's message after 'What is your name?':", user_content_after_name)
+                # print("User's message after 'What is your name?':", user_content_after_name)
                 break
         
         for item in data.get("data", [1]):
@@ -545,7 +546,7 @@ def check_conversation(session_id):
                 found_number_question = True
             elif found_number_question and item.get("from") == "user":
                 user_content_after_number = item["content"]
-                print("User's message after 'What is your phone number?':", user_content_after_number)
+                # print("User's message after 'What is your phone number?':", user_content_after_number)
                 break
 
         print("Patching profile: " + str(user_content_after_name) + ", " + str(user_content_after_number))
@@ -581,18 +582,19 @@ def execute_flow(message, user_id, session_id):
 
     try:
         if not question_answered and user_conversation_state.get(user_id, 0) == 0:
-            print('Appending the first question')
+            # print('Appending the first question')
             user_first_msgs.append(question)
-            print("Executing check_conversation() for the first time")
-            send_agent_message_crisp('Як до вас звертатись?', session_id)
+            # print("Executing check_conversation() for the first time")
+            # send_agent_message_crisp('Як до вас звертатись?', session_id)
             emit('start', {'user_id': user_id, 'message': 'Як до вас звертатись?'}, room=user_id)
+            send_agent_message_crisp('Як до вас звертатись?', session_id)
             user_conversation_state[user_id] = 1
 
         elif not question_answered and user_conversation_state.get(user_id, 0) == 1:
-            print("Executing check_conversation() for the second time")
+            # print("Executing check_conversation() for the second time")
             emit('start', {'user_id': user_id, 'message': "Вкажіть будь ласка свій номер телефону для подальшого зв'язку з Вами."}, room=user_id)
             send_agent_message_crisp("Вкажіть будь ласка свій номер телефону для подальшого зв'язку з Вами.", session_id)
-            user_conversation_state[user_id] = 2
+            user_conversation_state[user_id] = 2    
         
         elif not question_answered and user_conversation_state.get(user_id, 0) == 2:
             cached_response = query_with_caching(user_first_msgs[0])
@@ -602,7 +604,7 @@ def execute_flow(message, user_id, session_id):
                 emit('start', {'user_id': user_id, 'message': cached_response}, room=user_id)
                 send_agent_message_crisp(cached_response, session_id)
             else:
-                print('Going into the condition')
+                # print('Going into the condition')
                 thread_openai_id = user_thread_mapping.get(user_id)
                 emit('start', {'user_id': user_id, 'message': 'Ваш запит в обробці. Це може зайняти до 1 хвилини'}, room=user_id)
                 send_message_user(thread_openai_id, user_first_msgs[0])
@@ -614,7 +616,7 @@ def execute_flow(message, user_id, session_id):
             user_conversation_state[user_id] = 3
 
         else:
-            print("Skipped check_conversation()")
+            # print("Skipped check_conversation()")
             cached_response = query_with_caching(question)
 
             if cached_response:
