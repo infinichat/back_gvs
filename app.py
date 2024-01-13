@@ -70,6 +70,7 @@ def start_thread_openai(user_id):
 # ... (rest of the code)
 user_conversation_state = {}
 user_first_messages = {}
+retrieved_session_ids = []
 
 @socketio.on('connect')
 def handle_connect():
@@ -85,6 +86,9 @@ def handle_connect():
     session_id = start_conversation_crisp()
     user_session_mapping[user_id] = session_id
     print(session_id)
+    retrieved_session_ids.append(session_id)
+    parse_user_id(user_id, session_id)
+    print(user_id, session_id)
     thread_openai_id = start_thread_openai(user_id)
     user_thread_mapping[user_id] = thread_openai_id
     print(thread_openai_id)
@@ -96,6 +100,58 @@ def handle_connect():
     # conversation_checked = 0
     # first_messages = []
 
+
+message_data = {}
+
+def parse_user_id(user_id, retrieved_session_id):
+    @socketio.on('send_message')
+    def crisp_messages(message, session_id):
+        if session_id in retrieved_session_ids:
+            # Reverse lookup to get user_id corresponding to session_id
+            user_id_for_session = next((uid for uid, sid in user_session_mapping.items() if sid == session_id), None)
+
+            if user_id_for_session:
+                print(f"Message received for user {user_id_for_session}: {message}")
+                emit('start', {'user_id': user_id_for_session, 'message': message}, room=user_id_for_session)
+            else:
+                print(f"Session ID {session_id} not mapped to any user.")
+        else:
+            print(f"Invalid session ID: {session_id}")
+
+
+# @socketio.on('message_to_delete')
+# def delete_message(fingerprint):
+#     # Check if the fingerprint exists in the message_data dictionary
+#     if fingerprint in message_data:
+#         # If it exists, retrieve the corresponding message
+#         del_message = message_data[fingerprint]
+        
+#         # Optionally, you can remove the entry from the dictionary if you want
+#         # del message_data[fingerprint]
+
+#         print(f"Message to delete: {del_message}")
+        
+#         # Emit an event to notify the client or perform any other actions
+#         emit('start', {'user_id': user_id, 'response': del_message}, room=user_id)
+#     else:
+#         print(f"No message found for fingerprint: {fingerprint}")
+
+# @socketio.on('edit_message')
+# def edit_message(new_message, fingerprint):
+#     if fingerprint in message_data:
+#         # Retrieve the existing message
+#         old_message = message_data[fingerprint]
+#         emit('start', {'user_id': user_id, 'response': old_message}, room=user_id)
+
+#         # Update the message in the dictionary
+#         message_data[fingerprint] = new_message
+
+#         print(f"Message edited. Old message: {old_message}, New message: {new_message}")
+
+#         # Emit an event to notify the client or perform any other actions
+#         emit('start', {'user_id': user_id, 'message': new_message}, room=user_id)
+#     else:
+#         print(f"No message found for fingerprint: {fingerprint}")
 
 @socketio.on('disconnect')
 def handle_disconnect():
@@ -597,6 +653,7 @@ def execute_flow(message, user_id, session_id):
             user_conversation_state[user_id] = 2    
         
         elif not question_answered and user_conversation_state.get(user_id, 0) == 2:
+            emit('start', {'user_id': user_id, 'message': 'Ваш запит в обробці. Це може зайняти до 1 хвилини'}, room=user_id)
             cached_response = query_with_caching(user_first_msgs[0])
             print(cached_response)
             check_conversation(session_id)
@@ -604,9 +661,9 @@ def execute_flow(message, user_id, session_id):
                 emit('start', {'user_id': user_id, 'message': cached_response}, room=user_id)
                 send_agent_message_crisp(cached_response, session_id)
             else:
-                # print('Going into the condition')
-                thread_openai_id = user_thread_mapping.get(user_id)
+                print('Going into the condition')
                 emit('start', {'user_id': user_id, 'message': 'Ваш запит в обробці. Це може зайняти до 1 хвилини'}, room=user_id)
+                thread_openai_id = user_thread_mapping.get(user_id)
                 send_message_user(thread_openai_id, user_first_msgs[0])
                 ai_response = retrieve_ai_response(thread_openai_id)
                 if ai_response:
@@ -623,8 +680,8 @@ def execute_flow(message, user_id, session_id):
                 emit('start', {'user_id': user_id, 'message': cached_response}, room=user_id)
                 send_agent_message_crisp(cached_response, session_id)
             else:
-                thread_openai_id = user_thread_mapping.get(user_id)
                 emit('start', {'user_id': user_id, 'message': 'Ваш запит в обробці. Це може зайняти до 1 хвилини'}, room=user_id)
+                thread_openai_id = user_thread_mapping.get(user_id)
                 send_message_user(thread_openai_id, question)
                 ai_response = retrieve_ai_response(thread_openai_id)
                 if ai_response:
