@@ -118,41 +118,6 @@ def parse_user_id(user_id, retrieved_session_id):
         else:
             print(f"Invalid session ID: {session_id}")
 
-
-# @socketio.on('message_to_delete')
-# def delete_message(fingerprint):
-#     # Check if the fingerprint exists in the message_data dictionary
-#     if fingerprint in message_data:
-#         # If it exists, retrieve the corresponding message
-#         del_message = message_data[fingerprint]
-        
-#         # Optionally, you can remove the entry from the dictionary if you want
-#         # del message_data[fingerprint]
-
-#         print(f"Message to delete: {del_message}")
-        
-#         # Emit an event to notify the client or perform any other actions
-#         emit('start', {'user_id': user_id, 'response': del_message}, room=user_id)
-#     else:
-#         print(f"No message found for fingerprint: {fingerprint}")
-
-# @socketio.on('edit_message')
-# def edit_message(new_message, fingerprint):
-#     if fingerprint in message_data:
-#         # Retrieve the existing message
-#         old_message = message_data[fingerprint]
-#         emit('start', {'user_id': user_id, 'response': old_message}, room=user_id)
-
-#         # Update the message in the dictionary
-#         message_data[fingerprint] = new_message
-
-#         print(f"Message edited. Old message: {old_message}, New message: {new_message}")
-
-#         # Emit an event to notify the client or perform any other actions
-#         emit('start', {'user_id': user_id, 'message': new_message}, room=user_id)
-#     else:
-#         print(f"No message found for fingerprint: {fingerprint}")
-
 @socketio.on('disconnect')
 def handle_disconnect():
     print('Client disconnected')  
@@ -276,21 +241,36 @@ def send_agent_message_crisp(response, session_id):
         print(response.text)
 
 
-# @app.route('/')
-# def index():
-#     return render_template("index.html")
+# @app.route("/", methods=['POST', 'GET'])
+# def receive_msg_from_client():
+#     if request.method == 'POST':
+#         if request.is_json:
+#             data = request.get_json()
+#             print("Received JSON data:", data)
+            
+#             # Extract the value of "question" directly
+#             question_value = data.get('question', 'Question not found')
+#             user_id = data.get('user_id')
+#             print(user_id)
+#             print(question_value)
+#             session_id = user_session_mapping.get(user_id)
+#             print(session_id)
 
-# ?
-    
+#             asyncio.create_task(execute_flow(question_value, user_id, session_id))
+            
+#             # Return the value of "question" directly
+#             return jsonify(question_value)
 
-# socketio.on_namespace(ChatNamespace('/chat/1'))
-# socketio.on_namespace(ChatNamespace('/chat/2'))
+#         else:
+#             print("Invalid request. Expected JSON content type.")
+#     if request.method == 'GET':
+#         return jsonify("response",)
+
 
 # thread_openai_id = None
 token = os.getenv('token')
 
 
-# thread_openai_id = None
 
 
 #Sending a message to a thread. Step 1
@@ -454,71 +434,6 @@ def query_with_caching(question):
                 connection.close()
         except psycopg2.Error as e:
             print(f"Error closing the database connection: {e}")
- 
-# def query_with_caching(question):
-#     connection = None
-#     try:
-#         connection = psycopg2.connect(**db_config)
-#         cursor = connection.cursor()
-
-#         # Remove punctuation and perform case-insensitive matching using regular expression
-#         cleaned_question = re.sub(r'[^\w\s]', '', question)
-#         query = "SELECT answer FROM chat_cache WHERE question ~* %s"
-#         cursor.execute(query, (cleaned_question,))
-#         result = cursor.fetchone()
-
-#         print("querying db")
-
-#         if result:
-#             return result[0]
-#         else:
-#             return None
-
-#     except psycopg2.OperationalError as e:
-#         print(f"Error connecting to the database: {e}")
-
-#     finally:
-#         try:
-#             if connection:
-#                 connection.close()
-#         except psycopg2.Error as e:
-#             print(f"Error closing the database connection: {e}")
-#         finally:
-#             if cursor:
-#                 cursor.close()
-
-
-# def cache_response_in_database(question, answer):
-#     connection = None
-#     try:
-#         connection = psycopg2.connect(**db_config)
-#         cursor = connection.cursor()
-
-#         query = "INSERT INTO chat_cache (question, answer) VALUES (%s, %s)"
-#         cursor.execute(query, (question, answer))
-
-#         print("inserting qa")
-
-#         connection.commit()
-
-#     except psycopg2.OperationalError as e:
-#         print(f"Error connecting to the database: {e}")
-
-#     finally:
-#         try:
-#             if cursor:
-#                 cursor.close()
-#         except psycopg2.Error as e:
-#             print(f"Error closing the cursor: {e}")
-
-#         try:
-#             if connection:
-#                 connection.close()
-#         except psycopg2.Error as e:
-#             print(f"Error closing the database connection: {e}")
-
-# first_question = 'What is your name?'
-# second_question = 'What is your phone number?'
 
 # Modify patch_profile to accept nickname and phone_number as arguments
 def patch_profile(nickname, phone_number, session_id):
