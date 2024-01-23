@@ -66,7 +66,7 @@ async def start_thread_openai(user_id):
                 error_message = (await response.json()).get("error", {}).get("message", "")
                 if "Incorrect API key provided" in error_message:
                     print("Error starting OpenAI thread: Incorrect API key provided")
-                    emit('start', {'user_id': user_id, 'message': "Технічні неполадки. Відповімо скоро"})
+                    socketio.emit('start', {'user_id': user_id, 'message': "Технічні неполадки. Відповімо скоро"})
                 else:
                     print("Error starting OpenAI thread:", response.status, error_message)
                 return None
