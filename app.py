@@ -78,8 +78,27 @@ user_questions_mapping = {}
 user_conv_state_mapping = {}
 
 
+# @socketio.on('user_id')
+# def handle_join_userid(data):
+#     user_id = data.get('user_id')
+#     print("User id event: " + user_id)
+#     join_room(user_id)
+#     if join_room(user_id):
+#         print(f"User {user_id} successfully joined the room")
+#     else:
+#         print(f"Failed to join the room for user {user_id}")
+
 @socketio.on('connect')
 def handle_connect():
+    @socketio.on('user_id')
+    def handle_join_userid(data):
+            user_id = data.get('user_id')
+            print("User id event: " + user_id)
+            join_room(user_id)
+            if join_room(user_id):
+                print(f"User {user_id} successfully joined the room")
+            else:
+                print(f"Failed to join the room for user {user_id}")
     print("Connected user")
 
 
@@ -145,6 +164,7 @@ async def handle_connection_async(user_id_received, question_answered_received, 
     print("Thread openai" + thread_openai_id)
     user_questions_mapping[user_id_received] = question_answered_received
     print('Mapped question_answer: ' + str(user_questions_mapping[user_id_received]))
+    
 
 
     # Reset state for the new user
@@ -160,6 +180,7 @@ async def handle_connection_async(user_id_received, question_answered_received, 
         'user_id': user_id,
         'question_answered': question_answered,
         'user_conversation_state': user_conversation_state[user_id],
+        'user_first_messages': user_first_msgs,
         'session_crisp': session_id_crisp
     }, room=user_id)
 
@@ -348,6 +369,7 @@ async def receive_msg_from_client():
         if request.is_json:
             data = request.get_json()
             print("Received JSON data:", data)
+            
             
             # Extract the value of "question" directly
             question_value = data.get('question', 'Question not found')
@@ -580,6 +602,12 @@ async def check_conversation(session_id):
                         found_name_question = True
                     elif found_name_question and item.get("from") == "user":
                         user_content_after_name = item["content"]
+
+                        return user_content_after_name
+                        # user_name_thread = user_content_after_name
+                        # print('Sending the name of the user to a thread ' + user_name_thread)
+                        # # thread_openai_id = user_thread_mapping.get(user_id)
+                        # await send_message_user_async(thread_openai_id, user_name_thread)
                         # print("User's message after 'What is your name?':", user_content_after_name)
                         break
 
@@ -665,6 +693,7 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
             cached_response = await query_with_caching(user_first_msgs[0])
             print("User first message to retrieve in this phase: " + user_first_msgs[0])
             print(cached_response)
+            thread_openai_id = user_thread_mapping.get(user_id)
             await check_conversation(session_id)
             if cached_response:
                 # socketio.emit('start', {'user_id': user_id, 'message': cached_response}, room=user_id)
@@ -674,7 +703,9 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
                 send_agent_message_crisp("Ваш запит в обробці. Це може зайняти до 1 хвилини", session_id)
                 # socketio.emit('start', {'user_id': user_id, 'message': 'Ваш запит в обробці. Це може зайняти до 1 хвилини'}, room=user_id)
                 thread_openai_id = user_thread_mapping.get(user_id)
-                await send_message_user_async(thread_openai_id, user_first_msgs[0])
+                user_content_name = await check_conversation(session_id)
+                question_name =  user_content_name + ". " + user_first_msgs[0]
+                await send_message_user_async(thread_openai_id, question_name)
                 ai_response = await retrieve_ai_response_async(thread_openai_id)
                 if ai_response:
                     send_agent_message_crisp(ai_response, session_id)
@@ -699,6 +730,11 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
         socketio.emit('start', {'user_id': user_id, 'message': 'Щось пішло не так, спробуйте пізніше...'}, room=user_id)
 
 async def handle_user_conversation_state_3(user_id, question_answered, user_conversation_state, question, session_id):
+    user_session_mapping[user_id] = session_id
+    retrieved_session_ids.append(session_id)
+    parse_user_id(user_id, session_id)
+    print(user_id, session_id)
+    print("Mapped session_id to user_id")
     try:
            if question_answered == 'True' and user_conversation_state == '3':
             cached_response = await query_with_caching(question)
@@ -707,9 +743,12 @@ async def handle_user_conversation_state_3(user_id, question_answered, user_conv
                 # socketio.emit('start', {'user_id': user_id, 'message': cached_response}, room=user_id)
                 send_agent_message_crisp(cached_response, session_id)
             else:
+                user_content_name = await check_conversation(session_id)
+                question_name = user_content_name + ". " + question
+                print(question_name)
                 # socketio.emit('start', {'user_id': user_id, 'message': 'Ваш запит в обробці. Це може зайняти до 1 хвилини'}, room=user_id)
                 thread_openai_id = user_thread_mapping.get(user_id)
-                await send_message_user_async(thread_openai_id, question)
+                await send_message_user_async(thread_openai_id, question_name)
                 ai_response = await retrieve_ai_response_async(thread_openai_id)
                 if ai_response:
                     # socketio.emit('start', {'user_id': user_id, 'message': ai_response}, room=user_id)
