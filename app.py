@@ -755,7 +755,7 @@ async def handle_user_conversation_state_3(user_id, question_answered, user_conv
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(socketio.run(host='0.0.0.0', port=5000))
+    loop.run_until_complete(socketio.run())
 
 # import asyncio
 # import os
