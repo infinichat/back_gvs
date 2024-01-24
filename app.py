@@ -1,20 +1,14 @@
 import asyncio
 import os
-import threading
-import uuid
 import aiohttp
 import asyncpg
 from flask import Flask, jsonify, request
 from flask_socketio import SocketIO, emit, join_room
-import time
-import psycopg2
 import requests
 from dotenv import load_dotenv
 from requests.auth import HTTPBasicAuth
 import re
 from flask_cors import CORS
-import psycopg2
-from psycopg2 import OperationalError
 from gevent.pywsgi import WSGIServer
 
 app = Flask(__name__)
@@ -90,26 +84,27 @@ user_conv_state_mapping = {}
 
 @socketio.on('connect')
 def handle_connect():
-    @socketio.on('user_id')
-    def handle_join_userid(data):
-            user_id = data.get('user_id')
-            print("User id event: " + user_id)
-            join_room(user_id)
-            if join_room(user_id):
-                print(f"User {user_id} successfully joined the room")
-            else:
-                print(f"Failed to join the room for user {user_id}")
     print("Connected user")
 
+@socketio.on('user_id')
+def handle_join_userid(data):
+    user_id = data.get('user_id')
+    print("User id event: " + user_id)
+
+    if user_id not in socketio.server.rooms(request.sid):
+        join_room(user_id)
+        print(f"User {user_id} successfully joined the room")
+    else:
+        print(f"User {user_id} is already in the room")
 
 @socketio.on('set_defaults')
 def handle_init_connection(data):
     user_id_received = data.get('user_id')
-    join_room(user_id_received)
-    if join_room(user_id_received):
-        print(f"User {user_id_received} successfully joined the room")
-    else:
-        print(f"Failed to join the room for user {user_id_received}")
+    # join_room(user_id_received)
+    # if join_room(user_id_received):
+    #     print(f"User {user_id_received} successfully joined the room")
+    # else:
+    #     print(f"Failed to join the room for user {user_id_received}")
     print("Emitting created variables")
     # if user_id_received == "null" or user_id_received is None:
     #         user_id_received = str(uuid.uuid4())
