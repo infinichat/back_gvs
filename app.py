@@ -134,7 +134,7 @@ def handle_init_connection(data):
 
 
     # Run asynchronous tasks in the background
-    socketio.start_sending(start_connection_tasks, user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp)
+    socketio.start_background_task(start_connection_tasks, user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp)
 
 def start_connection_tasks(user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp):
     asyncio.run(handle_connection_async(user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp))
@@ -778,9 +778,5 @@ async def handle_user_conversation_state_3(user_id, question_answered, user_conv
         socketio.emit('start', {'user_id': user_id, 'message': 'Щось пішло не так, спробуйте пізніше...'}, room=user_id)
 
 if __name__ == "__main__":
-    socketio.run(app, port=8000, async_mode='asyncio')
-    socketio.start_sending()
-
-# if __name__ == "__main__":
-#     loop = asyncio.get_event_loop()
-#     loop.run_until_complete(socketio.run(app, port=8000))
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(socketio.run(app, port=5000))
