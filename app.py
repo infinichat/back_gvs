@@ -1,3 +1,5 @@
+from gevent import monkey
+monkey.patch_all()
 import asyncio
 import os
 import aiohttp
@@ -13,7 +15,7 @@ from gevent.pywsgi import WSGIServer
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
-socketio = SocketIO(app, cors_allowed_origins='*')
+socketio = SocketIO(app, cors_allowed_origins='*', async_mode='gevent', message_queue='redis://')
 
 load_dotenv()
 
