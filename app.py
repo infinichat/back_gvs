@@ -11,11 +11,10 @@ from dotenv import load_dotenv
 from requests.auth import HTTPBasicAuth
 import re
 from flask_cors import CORS
-from gevent.pywsgi import WSGIServer
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
-socketio = SocketIO(app, cors_allowed_origins='*', async_mode='gevent', message_queue='redis://')
+socketio = SocketIO(app, cors_allowed_origins='*', message_queue='redis://')
 
 load_dotenv()
 
