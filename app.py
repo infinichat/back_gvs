@@ -370,7 +370,7 @@ async def receive_msg_from_client():
             # Extract the value of "question" directly
             question_value = data.get('question', 'Question not found')
             user_id = data.get('user_id', 'User id not found')
-            print("Received user_id with post request: " + user_id)
+            # print("Received user_id with post request: " + user_id)
             print("Received question with post request: " + question_value)
             # session_id = user_session_mapping.get(user_id)
             session_id = data.get('session_id')
