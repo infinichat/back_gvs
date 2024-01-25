@@ -1,5 +1,5 @@
-from gevent import monkey
-monkey.patch_all()
+# from gevent import monkey
+# monkey.patch_all()
 import asyncio
 import os
 import aiohttp
@@ -14,7 +14,8 @@ from flask_cors import CORS
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
-socketio = SocketIO(app, cors_allowed_origins='*', message_queue='redis://')
+#  message_queue='redis://'
+socketio = SocketIO(app, cors_allowed_origins='*')
 
 load_dotenv()
 
@@ -185,7 +186,7 @@ message_data = {}
 
 
 def parse_user_id(user_id, retrieved_session_id):
-    @socketio.on('send_message')
+    # @socketio.on('send_message')
     def crisp_messages(message, session_id, fingerprint):
         if session_id in retrieved_session_ids:
 
@@ -200,7 +201,7 @@ def parse_user_id(user_id, retrieved_session_id):
                 print(f"Session ID {session_id} not mapped to any user.")
         else:
             print(f"Invalid session ID: {session_id}")
-    @socketio.on('edit_message')
+    # @socketio.on('edit_message')
     def edit_message(new_message, fingerprint):
         if fingerprint in message_data:
             # Retrieve the existing message
@@ -217,7 +218,7 @@ def parse_user_id(user_id, retrieved_session_id):
             socketio.emit('start', {'user_id': user_id, 'message': new_message}, room=user_id)
         else:
             print(f"No message found for fingerprint: {fingerprint}")
-    @socketio.on('message_to_delete')
+    # @socketio.on('message_to_delete')
     def delete_message(fingerprint, session_id):
         # Check if the fingerprint exists in the message_data dictionary
         if session_id in retrieved_session_ids:
@@ -780,3 +781,50 @@ async def handle_user_conversation_state_3(user_id, question_answered, user_conv
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     loop.run_until_complete(socketio.run(app, port=5000))
+
+
+      
+
+
+# def connect_to_server():
+#     websockets.connect(endpoint_url)
+#     response = websockets.recv()
+#     print(f"Received {response}")
+
+# if __name__ == "__main__":
+#     connect_to_server()
+# Connect to the server and start communication
+# async def connect_to_server():
+#     async with websockets.connect(endpoint_url) as websocket:
+#         await websocket.send("Hello, Server!")
+#         response = await websocket.recv()
+#         print(f"Received: {response}")
+
+# asyncio.get_event_loop().run_until_complete(connect_to_server())
+
+
+# @sio.event
+# def disconnect():
+#     print("RTM API disconnected")
+
+# @sio.event
+# def connect_error(data):
+#     print("RTM API connection error", data)
+
+# # Handle IO events
+# @sio.event
+# def reconnect():
+#     print("RTM API reconnecting...")
+
+# @sio.event
+# def error(data):
+#     print("RTM API error", data)
+
+# # Create a WebSocket connection
+# # ws = websocket.WebSocket()
+# # websocket.connect(endpoint_url)
+
+# # To keep the program running
+
+
+
