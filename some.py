@@ -1,3 +1,4 @@
+
 # from gevent import monkey
 # monkey.patch_all()
 import asyncio
@@ -137,8 +138,11 @@ def handle_init_connection(data):
     # Run asynchronous tasks in the background
     socket_io.start_background_task(start_connection_tasks, user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp)
 
+
 def start_connection_tasks(user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp):
     asyncio.run(handle_connection_async(user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp))
+    asyncio.run(start_conv_tasks(user_id_received, session_id_crisp))
+
 
 async def handle_connection_async(user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp):
     global question_answered
@@ -154,13 +158,15 @@ async def handle_connection_async(user_id_received, question_answered_received, 
     print("Assigned session_id: " +  session_id_crisp)
 
     retrieved_session_ids.append(session_id_crisp)
-    # parse_user_id(user_id_received, session_id_crisp)
+    # await main(user_id_received, session_id_crisp)
+    # await parse_user_id(user_id_received, session_id_crisp)
     print(user_id_received, session_id_crisp)
     thread_openai_id = await start_thread_openai(user_id_received)
     user_thread_mapping[user_id_received] = thread_openai_id
     print("Thread openai" + thread_openai_id)
     user_questions_mapping[user_id_received] = question_answered_received
     print('Mapped question_answer: ' + str(user_questions_mapping[user_id_received]))
+    
 
 
     # Reset state for the new user
@@ -179,10 +185,124 @@ async def handle_connection_async(user_id_received, question_answered_received, 
         'user_first_messages': user_first_msgs,
         'session_crisp': session_id_crisp
     }, room=user_id)
+    
 
-# asyncio.get_event_loop().run_until_complete(handle_connection_async(user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp))
+    
+    # socket_io.start_background_task(start_conv_tasks, user_id_received, session_id_crisp)
+
+
+async def start_conv_tasks(user_id_received, session_id_crisp):
+    await main(user_id_received, session_id_crisp)
+
 
 message_data = {}
+
+# Run the event loop
+# asyncio.get_event_loop().run_until_complete(main())
+# def parse_user_id(user_id, retrieved_session_id):
+#     # @socketio.on('send_message')
+#     def crisp_messages(message, session_id, fingerprint):
+#         if session_id in retrieved_session_ids:
+
+#             # Reverse lookup to get user_id corresponding to session_id
+#             user_id_for_session = next((uid for uid, sid in user_session_mapping.items() if sid == session_id), None)
+
+#             if user_id_for_session:
+#                 print(f"Message received for user {user_id_for_session}: {message}")
+#                 message_data[fingerprint] = message
+#                 socketio.emit('start', {'user_id': user_id_for_session, 'message': message}, room=user_id_for_session)
+#             else:
+#                 print(f"Session ID {session_id} not mapped to any user.")
+#         else:
+#             print(f"Invalid session ID: {session_id}")
+#     # @socketio.on('edit_message')
+#     def edit_message(new_message, fingerprint):
+#         if fingerprint in message_data:
+#             # Retrieve the existing message
+#             old_message = message_data[fingerprint]
+#             # emit('start', {'user_id': user_id, 'response': old_message}, room=user_id)
+
+#             # Update the message in the dictionary
+#             message_data[fingerprint] = new_message
+#             socketio.emit('delete_message', {'user_id': user_id, 'message': old_message}, room=user_id)
+
+#             print(f"Message edited. Old message: {old_message}, New message: {new_message}")
+
+#             # Emit an event to notify the client or perform any other actions
+#             socketio.emit('start', {'user_id': user_id, 'message': new_message}, room=user_id)
+#         else:
+#             print(f"No message found for fingerprint: {fingerprint}")
+#     # @socketio.on('message_to_delete')
+#     def delete_message(fingerprint, session_id):
+#         # Check if the fingerprint exists in the message_data dictionary
+#         if session_id in retrieved_session_ids:
+#             # Reverse lookup to get user_id corresponding to session_id
+#             user_id_for_session = next((uid for uid, sid in user_session_mapping.items() if sid == session_id), None)
+
+#             if user_id_for_session:
+#                 if fingerprint in message_data:
+#                     # If it exists, retrieve the corresponding message
+#                     del_message = message_data[fingerprint]
+
+#                     print("User id to submit delete message: " + user_id_for_session)   
+#                     emit('user_id', {'response': user_id_for_session})
+
+#                     emit('delete_message', {'user_id': user_id_for_session, 'message': del_message}, room=user_id)
+
+#                     # Optionally, you can remove the entry from the dictionary if you want
+#                     del message_data[fingerprint]
+
+#                     print(f"Message to delete: {del_message}")
+                    
+#                     # Emit an event to notify the client or perform any other actions
+#                     # emit('start', {'user_id': user_id, 'response': del_message}, room=user_id)
+#                 else:
+#                     print(f"No message found for fingerprint: {fingerprint}")
+
+#     return crisp_messages, edit_message, delete_message
+# async def parse_user_id(user_id, retrieved_session_ids):
+#     async def crisp_messages(message, session_id, fingerprint):
+#         if session_id in retrieved_session_ids:
+#             user_id_for_session = next((uid for uid, sid in user_session_mapping.items() if sid == session_id), None)
+
+#             if user_id_for_session:
+#                 print(f"Message received for user {user_id_for_session}: {message}")
+#                 message_data[fingerprint] = message
+#                 await socketio.emit('start', {'user_id': user_id_for_session, 'message': message}, room=user_id_for_session)
+#             else:
+#                 print(f"Session ID {session_id} not mapped to any user.")
+#         else:
+#             print(f"Invalid session ID: {session_id}")
+
+#     async def edit_message(new_message, fingerprint):
+#         if fingerprint in message_data:
+#             old_message = message_data[fingerprint]
+#             message_data[fingerprint] = new_message
+#             await socketio.emit('delete_message', {'user_id': user_id, 'message': old_message}, room=user_id)
+#             print(f"Message edited. Old message: {old_message}, New message: {new_message}")
+#             await socketio.emit('start', {'user_id': user_id, 'message': new_message}, room=user_id)
+#         else:
+#             print(f"No message found for fingerprint: {fingerprint}")
+
+#     async def delete_message(fingerprint, session_id):
+#         if session_id in retrieved_session_ids:
+#             user_id_for_session = next((uid for uid, sid in user_session_mapping.items() if sid == session_id), None)
+
+#             if user_id_for_session:
+#                 if fingerprint in message_data:
+#                     del_message = message_data[fingerprint]
+
+#                     print("User id to submit delete message: " + user_id_for_session)
+#                     await socketio.emit('user_id', {'response': user_id_for_session})
+#                     await socketio.emit('delete_message', {'user_id': user_id_for_session, 'message': del_message}, room=user_id)
+
+#                     del message_data[fingerprint]
+#                     print(f"Message to delete: {del_message}")
+#                 else:
+#                     print(f"No message found for fingerprint: {fingerprint}")
+
+#     return crisp_messages, edit_message, delete_message
+
 import socketio
 
 sio = socketio.AsyncClient()
@@ -212,8 +332,30 @@ async def authenticated(data):
 
 async def unauthorized(data):
     print(data)
+  
+async def on_disconnect():
+    print("RTM API disconnected")
 
-async def message_received_event(message):
+async def on_connect_error(error):
+    print("RTM API connection error", error)
+
+async def on_reconnect():
+    print("RTM API reconnecting...")
+
+async def on_error(error):
+    print("RTM API error", error)
+
+# async def connect_to_socket():
+endpoint_url = "wss://app.relay.crisp.chat/p/68/"
+
+sio.on('connect', on_connect)
+sio.on('authenticated', authenticated)
+sio.on('unauthorized', unauthorized)
+
+
+async def parse_user_id(user_id, retrieved_session_ids):
+    @sio.event 
+    async def message_received_event(message):
             #   message.content, message.session_id, message.fingerprint
             print('Got a message from agent: ' + message['content'], message['session_id'], message['fingerprint']);
             session_id = message['session_id']
@@ -230,31 +372,22 @@ async def message_received_event(message):
             else:
                 print(f"Invalid session ID: {session_id}")
             pass
-
-# async def message_received_event(message):
-#     #   message.content, message.session_id, message.fingerprint
-#     print('Got a message from agent: ' + message['content'], message['session_id'], message['fingerprint']);
-async def message_updated_event(message):
+    # sio.on('message:updated')
+    @sio.event 
+    async def edit_message(message):
             fingerprint = message['fingerprint']
             new_message = message['content']
-            session_id = message['session_id']
             if fingerprint in message_data:
-                if session_id in retrieved_session_ids:
-                    user_id_for_session = next((uid for uid, sid in user_session_mapping.items() if sid == session_id), None)
-
-                    if user_id_for_session:
-                        old_message = message_data[fingerprint]
-                        message_data[fingerprint] = new_message
-                        socket_io.emit('delete_message', {'user_id': user_id_for_session, 'message': old_message}, room=user_id_for_session)
-                        print(f"Message edited. Old message: {old_message}, New message: {new_message}")
-                        socket_io.emit('start', {'user_id': user_id_for_session, 'message': new_message}, room=user_id_for_session)
+                old_message = message_data[fingerprint]
+                message_data[fingerprint] = new_message
+                socket_io.emit('delete_message', {'user_id': user_id, 'message': old_message}, room=user_id)
+                print(f"Message edited. Old message: {old_message}, New message: {new_message}")
+                socket_io.emit('start', {'user_id': user_id, 'message': new_message}, room=user_id)
             else:
                 print(f"No message found for fingerprint: {fingerprint}")
             pass
-
-# async def message_updated_event(message):
-#     print('Got a updated message: ' + message['content'], message['fingerprint']);
-async def message_removed_event(message):
+    # sio.on('message:removed')
+    async def delete_message(message):
             session_id = message['session_id']
             fingerprint = message['fingerprint']
             if session_id in retrieved_session_ids:
@@ -266,7 +399,7 @@ async def message_removed_event(message):
 
                         print("User id to submit delete message: " + user_id_for_session)
                         socket_io.emit('user_id', {'response': user_id_for_session})
-                        socket_io.emit('delete_message', {'user_id': user_id_for_session, 'message': del_message}, room=user_id_for_session)
+                        socket_io.emit('delete_message', {'user_id': user_id_for_session, 'message': del_message}, room=user_id)
 
                         del message_data[fingerprint]
                         print(f"Message to delete: {del_message}")
@@ -274,31 +407,15 @@ async def message_removed_event(message):
                         print(f"No message found for fingerprint: {fingerprint}")
                     pass 
 
-# async def message_removed_event(message):
-#     print('Got a removed message: ' + message['fingerprint'], message['session_id']);
-
-   
-async def on_disconnect():
-    print("RTM API disconnected")
-
-async def on_connect_error(error):
-    print("RTM API connection error", error)
-
-async def on_reconnect():
-    print("RTM API reconnecting...")
-
-async def on_error(error):
-    print("RTM API error", error)
-
-async def connect_to_socket():
-    endpoint_url = "wss://app.relay.crisp.chat/p/68/"
-
-    sio.on('connect', on_connect)
-    sio.on('authenticated', authenticated)
-    sio.on('unauthorized', unauthorized)
     sio.on('message:received', message_received_event)
-    sio.on('message:updated', message_updated_event)
-    sio.on('message:removed', message_removed_event)
+    sio.on('message:updated', edit_message)
+    sio.on('message:removed', delete_message)
+    sio.on('disconnect', on_disconnect)
+    sio.on('message:received')
+
+    # sio.on('message:received', message_received_event)
+    # sio.on('message:updated', message_updated_event)
+    # sio.on('message:removed', message_removed_event)
     sio.on('disconnect', on_disconnect)
     sio.on('connect_error', on_connect_error)
 
@@ -308,18 +425,20 @@ async def connect_to_socket():
 
     print(endpoint_url)
     
-    await sio.connect(endpoint_url, transports='websocket')
+    if not sio.connected:
+        await sio.connect(endpoint_url, transports='websocket')
+
     
     return sio
 
-async def main():
+async def main(user_id, session_id):
      while True:
         try:
-            client = await connect_to_socket()
+            client = await parse_user_id(user_id, session_id)
             print("Connected. Performing actions...")
 
             # Simulate some activity
-            await asyncio.sleep(10)
+            await asyncio.sleep(40)
 
         except Exception as e:
             print(f"An error occurred: {e}")
@@ -329,28 +448,24 @@ async def main():
         finally:
             await client.disconnect()
 
-# loop = asyncio.get_event_loop()
-# try:
-#     asyncio.ensure_future(main())
-#     loop.run_forever()
-# except KeyboardInterrupt:
-#     pass
-# finally:
-#     print("Closing loop")
-#     loop.close()
-def start_main_tasks():
-    asyncio.run(main())
-
-socket_io.start_background_task(start_main_tasks)
-
-# def start_main_tasks():
-#     asyncio.run(main())
-
-
 @socket_io.on('disconnect')
 def handle_disconnect():
     print('Client disconnected')  
 
+
+
+# @socketio.on('message_from_client')
+# async def handle_send_message(data):
+#     print(data)
+#     user_id = data.get('user_id')
+#     message = data.get('message')
+#     print(user_id)
+#     print(message)
+#     session_id = user_session_mapping.get(user_id)
+
+#     if session_id:
+#         await execute_flow_async(message, user_id, session_id)   
+    # execute_flow(message, user_id)
 
 async def start_conversation_crisp():
     basic_auth_credentials = (username, password)
@@ -746,6 +861,8 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
 
     send_user_message_crisp(question, session_id)
 
+    print("Going to execute execute_flow")
+
     try:
         if question_answered == 'False' and user_conversation_state == '0':
             # print('user_conversation_state in execute_flow ' + user_conversation_state[user_id])
@@ -841,12 +958,14 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
 async def handle_user_conversation_state_3(user_id, question_answered, user_conversation_state, question, session_id):
     user_session_mapping[user_id] = session_id
     retrieved_session_ids.append(session_id)
-    # parse_user_id(user_id, session_id)
-    # send_user_message_crisp(question, session_id)
+    # await main(user_id, session_id)
     print(user_id, session_id)
+    send_user_message_crisp(question, session_id)
     print("Mapped session_id to user_id")
+    print("Going to execute execute_flow_3")
     try:
            if question_answered == 'True' and user_conversation_state == '3':
+            print("awaiting query with caching")
             cached_response = await query_with_caching(question)
 
             if cached_response:
@@ -870,4 +989,6 @@ async def handle_user_conversation_state_3(user_id, question_answered, user_conv
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
+    # asyncio.get_event_loop().run_until_complete(main())
     loop.run_until_complete(socket_io.run(app, port=5000))
+
