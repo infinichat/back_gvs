@@ -1,3 +1,0 @@
-http://164.90.172.150/ {
-    reverse_proxy localhost:5000
-}

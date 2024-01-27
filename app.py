@@ -319,7 +319,7 @@ async def main():
             print("Connected. Performing actions...")
 
             # Simulate some activity
-            await asyncio.sleep(10)
+            await asyncio.sleep(120)
 
         except Exception as e:
             print(f"An error occurred: {e}")
@@ -712,12 +712,12 @@ async def check_conversation(session_id):
                     elif found_name_question and item.get("from") == "user":
                         user_content_after_name = item["content"]
 
-                        return user_content_after_name
+                        # return user_content_after_name
                         # user_name_thread = user_content_after_name
                         # print('Sending the name of the user to a thread ' + user_name_thread)
                         # # thread_openai_id = user_thread_mapping.get(user_id)
                         # await send_message_user_async(thread_openai_id, user_name_thread)
-                        # print("User's message after 'What is your name?':", user_content_after_name)
+                        print("User's message after 'What is your name?':", user_content_after_name)
                         break
 
                 for item in data.get("data", [1]):
@@ -726,11 +726,12 @@ async def check_conversation(session_id):
                         found_number_question = True
                     elif found_number_question and item.get("from") == "user":
                         user_content_after_number = item["content"]
-                        # print("User's message after 'What is your phone number?':", user_content_after_number)
+                        print("User's message after 'What is your phone number?':", user_content_after_number)
                         break
 
                 patch_profile(user_content_after_name, user_content_after_number, session_id)
-
+                return user_content_after_name
+            
     except aiohttp.ClientError as err:
         print(f"HTTP Error: {err}")
 
@@ -803,7 +804,8 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
             print("User first message to retrieve in this phase: " + user_first_msgs[0])
             print(cached_response)
             thread_openai_id = user_thread_mapping.get(user_id)
-            await check_conversation(session_id)
+            user_content_name = await check_conversation(session_id)
+            # await check_conversation(session_id)
             if cached_response:
                 # socketio.emit('start', {'user_id': user_id, 'message': cached_response}, room=user_id)
                 send_agent_message_crisp(cached_response, session_id)
@@ -812,7 +814,7 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
                 send_agent_message_crisp("Ваш запит в обробці. Це може зайняти до 1 хвилини", session_id)
                 # socketio.emit('start', {'user_id': user_id, 'message': 'Ваш запит в обробці. Це може зайняти до 1 хвилини'}, room=user_id)
                 thread_openai_id = user_thread_mapping.get(user_id)
-                user_content_name = await check_conversation(session_id)
+                # user_content_name = await check_conversation(session_id)
                 question_name =  user_content_name + ". " + user_first_msgs[0]
                 await send_message_user_async(thread_openai_id, question_name)
                 ai_response = await retrieve_ai_response_async(thread_openai_id)
