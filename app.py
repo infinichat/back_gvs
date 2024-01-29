@@ -133,13 +133,12 @@ def handle_init_connection(data):
     print('Received on set_defaults user_first_msgs: ' + str(user_first_msgs))
     
 
+
+    # Run asynchronous tasks in the background
     socket_io.start_background_task(start_connection_tasks, user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp)
 
-async def start_connection_tasks(user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp):
-    await handle_connection_async(user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp)
-
-# async def start_connection_tasks(user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp):
-#     await handle_connection_async(user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp))
+def start_connection_tasks(user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp):
+    asyncio.run(handle_connection_async(user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp))
 
 async def handle_connection_async(user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp):
     global question_answered
