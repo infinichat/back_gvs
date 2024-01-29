@@ -312,15 +312,16 @@ async def connect_to_socket():
     
     return sio
 
-async def run_socket_io():
-    # Assuming this is your Socket.IO initialization
-    await socket_io.run(app, port=5000)
+# async def run_socket_io():
+#     # Assuming this is your Socket.IO initialization
+#     await socket_io.run(app, port=5000)
 
 async def main():
     while True:
         try:
             client = await connect_to_socket()
             print("Connected. Performing actions...")
+            # await socket_io.run(app, port=5000)
 
             # Simulate some activity
             await asyncio.sleep(120)
@@ -333,8 +334,10 @@ async def main():
         finally:
             await client.disconnect()
 
+  
+
         # This line should be outside of the while loop
-        break
+        # break
 
 # loop = asyncio.get_event_loop()
 # try:
@@ -347,11 +350,11 @@ async def main():
 #     loop.close()
 # def start_main_tasks():
 #     asyncio.run(main())
+def start_main_tasks():
+    asyncio.run(main())
+socket_io.start_background_task(start_main_tasks)
 
-# socket_io.start_background_task(start_main_tasks)
 
-# def start_main_tasks():
-#     asyncio.run(main())
 
 
 @socket_io.on('disconnect')
@@ -882,4 +885,4 @@ async def handle_user_conversation_state_3(user_id, question_answered, user_conv
 # Now, you can run the event loop for both main and run_socket_io
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(asyncio.gather(main(), run_socket_io()))
+    loop.run_until_complete(main())
