@@ -35,9 +35,9 @@ password = os.getenv('crisp_key')
 first_messages = []
 user_session_mapping = {}
 user_thread_mapping = {}
-# import requests
 
-def start_thread_openai(user_id):
+
+async def start_thread_openai(user_id):
     global thread_openai_id
     api_url = "https://api.openai.com/v1/threads"
     headers = {
@@ -47,25 +47,25 @@ def start_thread_openai(user_id):
         "Authorization": f"Bearer {token}"
     }
 
-    response = requests.post(
-        api_url,
-        headers=headers,
-        json={},
-    )
-
-    if response.status_code == 200:
-        data = response.json()
-        thread_openai_id = data.get("id")
-        print("Thread started successfully! Thread id:", thread_openai_id)
-        return thread_openai_id
-    elif response.status_code == 401:  # Unauthorized (Invalid API key)
-        error_message = response.json().get("error", {}).get("message", "")
-        if "Incorrect API key provided" in error_message:
-            print("Error starting OpenAI thread: Incorrect API key provided")
-            socket_io.emit('start', {'user_id': user_id, 'message': "Технічні неполадки. Відповімо скоро"})
-        else:
-            print("Error starting OpenAI thread:", response.status_code, error_message)
-        return None
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            api_url,
+            headers=headers,
+            json={},
+        ) as response:
+            if response.status == 200:
+                data = await response.json()
+                thread_openai_id = data.get("id")
+                print("Thread started successfully! Thread id:", thread_openai_id)
+                return thread_openai_id
+            elif response.status == 401:  # Unauthorized (Invalid API key)
+                error_message = (await response.json()).get("error", {}).get("message", "")
+                if "Incorrect API key provided" in error_message:
+                    print("Error starting OpenAI thread: Incorrect API key provided")
+                    socket_io.emit('start', {'user_id': user_id, 'message': "Технічні неполадки. Відповімо скоро"})
+                else:
+                    print("Error starting OpenAI thread:", response.status, error_message)
+                return None
 
 user_conversation_state = {}
 user_first_messages = {}
@@ -135,17 +135,17 @@ def handle_init_connection(data):
 
 
     # Run asynchronous tasks in the background
-    # socket_io.start_background_task(start_connection_tasks, user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp)
+    socket_io.start_background_task(start_connection_tasks, user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp)
 
-# def start_connection_tasks(user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp):
-    handle_connection_async(user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp)
+def start_connection_tasks(user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp):
+    asyncio.run(handle_connection_async(user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp))
 
-def handle_connection_async(user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp):
+async def handle_connection_async(user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp):
     global question_answered
     global user_conversation_state
     global user_first_messages
     if session_id_crisp == "set" or session_id_crisp is None:
-        session_id_crisp = start_conversation_crisp()
+        session_id_crisp = await start_conversation_crisp()
         # user_session_mapping[user_id_received] = session_id_crisp
     user_session_mapping[user_id_received] = session_id_crisp
     # session_id = await start_conversation_crisp()
@@ -156,7 +156,7 @@ def handle_connection_async(user_id_received, question_answered_received, user_c
     retrieved_session_ids.append(session_id_crisp)
     # parse_user_id(user_id_received, session_id_crisp)
     print(user_id_received, session_id_crisp)
-    thread_openai_id = start_thread_openai(user_id_received)
+    thread_openai_id = await start_thread_openai(user_id_received)
     user_thread_mapping[user_id_received] = thread_openai_id
     print("Thread openai" + thread_openai_id)
     user_questions_mapping[user_id_received] = question_answered_received
@@ -312,16 +312,11 @@ async def connect_to_socket():
     
     return sio
 
-# async def run_socket_io():
-#     # Assuming this is your Socket.IO initialization
-#     await socket_io.run(app, port=5000)
-
 async def main():
-    while True:
+     while True:
         try:
             client = await connect_to_socket()
             print("Connected. Performing actions...")
-            # await socket_io.run(app, port=5000)
 
             # Simulate some activity
             await asyncio.sleep(120)
@@ -334,11 +329,6 @@ async def main():
         finally:
             await client.disconnect()
 
-  
-
-        # This line should be outside of the while loop
-        # break
-
 # loop = asyncio.get_event_loop()
 # try:
 #     asyncio.ensure_future(main())
@@ -348,20 +338,21 @@ async def main():
 # finally:
 #     print("Closing loop")
 #     loop.close()
-# def start_main_tasks():
-#     asyncio.run(main())
 def start_main_tasks():
     asyncio.run(main())
 
 socket_io.start_background_task(start_main_tasks)
 
+# def start_main_tasks():
+#     asyncio.run(main())
+
 
 @socket_io.on('disconnect')
 def handle_disconnect():
     print('Client disconnected')  
-# import requests
 
-def start_conversation_crisp():
+
+async def start_conversation_crisp():
     basic_auth_credentials = (username, password)
     api_url = f"https://api.crisp.chat/v1/website/{website_id}/conversation"
     headers = {
@@ -370,28 +361,28 @@ def start_conversation_crisp():
         'X-Crisp-Tier': 'plugin'
     }
 
-    response = requests.post(
-        api_url,
-        headers=headers,
-        auth=basic_auth_credentials,
-    )
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            api_url,
+            headers=headers,
+            auth=aiohttp.BasicAuth(*basic_auth_credentials),
+        ) as response:
+            if response.status == 201:
+                data = await response.json()
+                current_session_id = data['data']['session_id']
+                print(current_session_id)
+                return current_session_id
+            else:
+                print(f"Request failed with status code {response.status}.")
+                print(await response.text())
 
-    if response.status_code == 201:
-        data = response.json()
-        current_session_id = data['data']['session_id']
-        print(current_session_id)
-        return current_session_id
-    else:
-        print(f"Request failed with status code {response.status_code}.")
-        print(response.text)
-
-def send_user_message_crisp(question, session_id):
+async def send_user_message_crisp(question, session_id):
     # session_id = start_conversation_crisp()
     # website_id = os.getenv("website_id")
     api_url = f"https://api.crisp.chat/v1/website/{website_id}/conversation/{session_id}/message"
     # username = os.getenv("crisp_identifier")
     # password = os.getenv("crisp_key")
-    basic_auth_credentials=(username, password)
+    basic_auth_credentials = (username, password)
     headers = {
         'Content-Type': 'application/json',
         'User-Agent': 'PostmanRuntime/7.35.0',
@@ -403,31 +394,25 @@ def send_user_message_crisp(question, session_id):
         "origin": "chat",
         "content": question
     }
-    response = requests.post(
-        api_url,
-        headers=headers,
-        auth=HTTPBasicAuth(*basic_auth_credentials),
-        json=payload
-    )
 
-    if response.status_code == 202:
-        print(response.json())
-    else:
-        print(f"Request failed with status code {response.status_code}.")
-        print(response.text)
-
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            api_url,
+            headers=headers,
+            auth=aiohttp.BasicAuth(*basic_auth_credentials),
+            json=payload
+        ) as response:
+            if response.status == 202:
+                print(await response.json())
+            else:
+                print(f"Request failed with status code {response.status}.")
+                print(await response.text())
 
 global_fingerprint = None
 
-
-def send_agent_message_crisp(response, session_id):
+async def send_agent_message_crisp(response, session_id):
     global global_fingerprint
-    # session_id = start_conversation_crisp()
-    # website_id = os.getenv("website_id")
     api_url = f"https://api.crisp.chat/v1/website/{website_id}/conversation/{session_id}/message"
-    # username = os.getenv("crisp_identifier")
-    # password = os.getenv("crisp_key")
-    # alert = "http://127.0.0.1:5000/edit"
     basic_auth_credentials = (username, password)
     headers = {
         'Content-Type': 'application/json',
@@ -441,22 +426,22 @@ def send_agent_message_crisp(response, session_id):
         "origin": "chat",
         "content": response
     }
-    response = requests.post(
-        api_url,
-        headers=headers,
-        auth=HTTPBasicAuth(*basic_auth_credentials),
-        json=payload
-    )
 
-    if response.status_code == 202:
-        data = response.json()
-        global_fingerprint = data['data']['fingerprint']
-        print(global_fingerprint)
-        return global_fingerprint
-    else:
-        print(f"Request failed with status code {response.status_code}.")
-        print(response.text)
-
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            api_url,
+            headers=headers,
+            auth=aiohttp.BasicAuth(*basic_auth_credentials),
+            json=payload
+        ) as response:
+            if response.status == 202:
+                data = await response.json()
+                global_fingerprint = data['data']['fingerprint']
+                print(global_fingerprint)
+                return global_fingerprint
+            else:
+                print(f"Request failed with status code {response.status}.")
+                print(await response.text())
 
 @app.route("/", methods=['POST', 'GET'])
 async def receive_msg_from_client():
@@ -651,8 +636,7 @@ async def query_with_caching(question):
         except asyncpg.PostgresError as e:
             print(f"Error closing the database connection: {e}")
 
-# Modify patch_profile to accept nickname and phone_number as arguments
-def patch_profile(nickname, phone_number, session_id):
+async def patch_profile(nickname, phone_number, session_id):
     # website_id = os.getenv("website_id")
     # username = os.getenv("crisp_identifier")
     # password = os.getenv("crisp_key")
@@ -671,25 +655,21 @@ def patch_profile(nickname, phone_number, session_id):
         }
     }
 
-    try:
-        response = requests.patch(
-            api_url,
-            headers=headers,
-            auth=HTTPBasicAuth(*basic_auth_credentials),
-            json=payload
-        )
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.patch(
+                api_url,
+                headers=headers,
+                auth=aiohttp.BasicAuth(*basic_auth_credentials),
+                json=payload
+            ) as response:
+                response.raise_for_status()  # Raise an HTTPError for bad responses (4xx and 5xx)
+                print(await response.json())
 
-        response.raise_for_status()  # Raise an HTTPError for bad responses (4xx and 5xx)
-        print(response.json())
-   
-    except requests.exceptions.HTTPError as errh:
-        print(f"HTTP Error: {errh}")
-    except requests.exceptions.ConnectionError as errc:
-        print(f"Error Connecting: {errc}")
-    except requests.exceptions.Timeout as errt:
-        print(f"Timeout Error: {errt}")
-    except requests.exceptions.RequestException as err:
-        print(f"Request Error: {err}")
+        except aiohttp.ClientError as err:
+            print(f"Aiohttp Client Error: {err}")
+        except Exception as err:
+            print(f"Error: {err}")
 
 
 async def check_conversation(session_id):
@@ -738,7 +718,7 @@ async def check_conversation(session_id):
                         print("User's message after 'What is your phone number?':", user_content_after_number)
                         break
 
-                patch_profile(user_content_after_name, user_content_after_number, session_id)
+                await patch_profile(user_content_after_name, user_content_after_number, session_id)
                 return user_content_after_name
             
     except aiohttp.ClientError as err:
@@ -754,7 +734,7 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
     if not question:
         raise ValueError("Invalid payload: 'question' is required.")
 
-    send_user_message_crisp(question, session_id)
+    await send_user_message_crisp(question, session_id)
 
     try:
         if question_answered == 'False' and user_conversation_state == '0':
@@ -766,7 +746,7 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
             # Assuming user_first_messages is a dictionary, update the value for the user_id
             # user_first_messages[user_id] = user_first_msgs
             # socketio.emit('start', {'user_id': user_id, 'message': 'Як до вас звертатись?'}, room=user)
-            send_agent_message_crisp('Як до вас звертатись?', session_id)
+            await send_agent_message_crisp('Як до вас звертатись?', session_id)
             user_conversation_state = 1
             socket_io.emit('update_variables', {
                 'user_id': user_id,
@@ -783,7 +763,7 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
             print("User first message: " + str(user_first_msgs))
             # print("User first message: " + user_first_msgs[0])
             # socketio.emit('start', {'user_id': user_id, 'message': "Вкажіть будь ласка свій номер телефону для подальшого зв'язку з Вами."}, room=user_id)
-            send_agent_message_crisp("Вкажіть будь ласка свій номер телефону для подальшого зв'язку з Вами.", session_id)
+            await send_agent_message_crisp("Вкажіть будь ласка свій номер телефону для подальшого зв'язку з Вами.", session_id)
             user_conversation_state = 2
             print("Emitting the updated variables")
             socket_io.emit('update_variables', {
@@ -798,7 +778,7 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
             #  user_first_msgs.append(question)
             user_first_messages[user_id] = user_first_msgs
             print("User first message: " + str(user_first_msgs))
-            send_agent_message_crisp("Ваш запит в обробці. Це може зайняти до 1 хвилини", session_id)
+            await send_agent_message_crisp("Ваш запит в обробці. Це може зайняти до 1 хвилини", session_id)
             # user_conversation_state = '3'
             print("Emitting the updated variables")
             socket_io.emit('update_variables', {
@@ -817,10 +797,10 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
             # await check_conversation(session_id)
             if cached_response:
                 # socketio.emit('start', {'user_id': user_id, 'message': cached_response}, room=user_id)
-                send_agent_message_crisp(cached_response, session_id)
+                await send_agent_message_crisp(cached_response, session_id)
             else:
                 print('Going into the condition')
-                send_agent_message_crisp("Ваш запит в обробці. Це може зайняти до 1 хвилини", session_id)
+                await send_agent_message_crisp("Ваш запит в обробці. Це може зайняти до 1 хвилини", session_id)
                 # socketio.emit('start', {'user_id': user_id, 'message': 'Ваш запит в обробці. Це може зайняти до 1 хвилини'}, room=user_id)
                 thread_openai_id = user_thread_mapping.get(user_id)
                 # user_content_name = await check_conversation(session_id)
@@ -828,7 +808,7 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
                 await send_message_user_async(thread_openai_id, question_name)
                 ai_response = await retrieve_ai_response_async(thread_openai_id)
                 if ai_response:
-                    send_agent_message_crisp(ai_response, session_id)
+                    await send_agent_message_crisp(ai_response, session_id)
 
                     # `socketio.emit('start', {'user_id': user_id, 'message': ai_response}, room=user_id)`
             user_conversation_state = '3'
@@ -862,7 +842,7 @@ async def handle_user_conversation_state_3(user_id, question_answered, user_conv
 
             if cached_response:
                 # socketio.emit('start', {'user_id': user_id, 'message': cached_response}, room=user_id)
-                send_agent_message_crisp(cached_response, session_id)
+                await send_agent_message_crisp(cached_response, session_id)
             else:
                 user_content_name = await check_conversation(session_id)
                 question_name = user_content_name + ". " + question
@@ -873,15 +853,12 @@ async def handle_user_conversation_state_3(user_id, question_answered, user_conv
                 ai_response = await retrieve_ai_response_async(thread_openai_id)
                 if ai_response:
                     # socketio.emit('start', {'user_id': user_id, 'message': ai_response}, room=user_id)
-                    send_agent_message_crisp(ai_response, session_id)
+                    await send_agent_message_crisp(ai_response, session_id)
 
     except Exception as e:
         print(f"Error: {str(e)}")
         socket_io.emit('start', {'user_id': user_id, 'message': 'Щось пішло не так, спробуйте пізніше...'}, room=user_id)
 
-
-
-# Now, you can run the event loop for both main and run_socket_io
-if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+# if __name__ == "__main__":
+#     loop = asyncio.get_event_loop()
+#     loop.run_until_complete(socket_io.run(app, port=5000))
