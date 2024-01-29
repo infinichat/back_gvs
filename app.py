@@ -873,5 +873,5 @@ async def handle_user_conversation_state_3(user_id, question_answered, user_conv
         socket_io.emit('start', {'user_id': user_id, 'message': 'Щось пішло не так, спробуйте пізніше...'}, room=user_id)
 
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(socket_io.run(app, port=5000))
+    asyncio.run(socket_io.run(app, port=5000))
+
