@@ -746,7 +746,9 @@ async def main():
 def start_main_tasks():
     asyncio.run(main())
 
-socket_io.start_background_task(start_main_tasks)
 
-if __name__ == '__main__':
-    socket_io.run(app, debug=True)
+from threading import Thread
+flask_thread = Thread(target=lambda: socket_io.run(app, debug=True))
+flask_thread.start()
+
+start_main_tasks()
