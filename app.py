@@ -44,7 +44,7 @@ async def receive_msg_from_client():
 
 sio = socketio.AsyncClient()
 
-# load_dotenv()
+load_dotenv()
 
 # db_config = {
 #     'host': os.getenv('PGHOST'),
