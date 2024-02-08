@@ -519,35 +519,42 @@ async def send_agent_message_crisp(response, session_id):
                 print(f"Request failed with status code {response.status}.")
                 print(await response.text())
 
+@socket_io.on('send_msgs')
+def receive_msg_from_client(data):
+    question_value = data.get('question', 'Question not found')
+    session_id = data.get('session_id')
 
-@app.route('/', methods=['POST', 'GET'])
-async def receive_msg_from_client():
-    if request.method == 'POST':
-        if request.is_json:
-            data = request.get_json()
-            print("Received JSON data:", data)
+    if session_id:
+        send_user_message_crisp(question_value, session_id)
+
+# @app.route('/', methods=['POST', 'GET'])
+# async def receive_msg_from_client():
+#     if request.method == 'POST':
+#         if request.is_json:
+#             data = request.get_json()
+#             print("Received JSON data:", data)
 
 
-                     # Extract the value of "question" directly
-            question_value = data.get('question', 'Question not found')
-            # user_id = data.get('user_id', 'User id not found')
-            #         # print("Received user_id with post request: " + user_id)
-            # print("Received question with post request: " + question_value)
-                    # session_id = user_session_mapping.get(user_id)
-            session_id = data.get('session_id')
-            # print("Received session_id with post request: " + session_id)
-            # question_answered = data.get('question_answered')
-            # print("Received question_answered with post request: " + question_answered)
-            # user_conversation_state = data.get('user_conversation_state')
-            # print("Received user_coonversation_state with post request: " + user_conversation_state)
+#                      # Extract the value of "question" directly
+#             question_value = data.get('question', 'Question not found')
+#             # user_id = data.get('user_id', 'User id not found')
+#             #         # print("Received user_id with post request: " + user_id)
+#             # print("Received question with post request: " + question_value)
+#                     # session_id = user_session_mapping.get(user_id)
+#             session_id = data.get('session_id')
+#             # print("Received session_id with post request: " + session_id)
+#             # question_answered = data.get('question_answered')
+#             # print("Received question_answered with post request: " + question_answered)
+#             # user_conversation_state = data.get('user_conversation_state')
+#             # print("Received user_coonversation_state with post request: " + user_conversation_state)
 
-            if session_id:
-                        send_user_message_crisp(question_value, session_id)
-                        # await execute_flow_async(question_value, user_id, session_id, question_answered, user_conversation_state)
-                        # await handle_user_conversation_state_3(user_id, question_answered, user_conversation_state, question_value, session_id)
+#             if session_id:
+#                         send_user_message_crisp(question_value, session_id)
+#                         # await execute_flow_async(question_value, user_id, session_id, question_answered, user_conversation_state)
+#                         # await handle_user_conversation_state_3(user_id, question_answered, user_conversation_state, question_value, session_id)
                     
-                    # Return the value of "question" directly
-            return jsonify(question_value)
+#                     # Return the value of "question" directly
+#             return jsonify(question_value)
 
 
 async def send_message_user_async(thread_openai_id, question):
