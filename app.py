@@ -755,6 +755,7 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
                 print("User first message to retrieve in this phase: " + question_value)
                 print(cached_response)
                 thread_openai_id = user_thread_mapping.get(user_id)
+                print(thread_openai_id)
                 user_content_name = await check_conversation(session_id)
                 if cached_response:
                     await send_agent_message_crisp(cached_response, session_id)
@@ -762,6 +763,7 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
                     print('Going into the condition')
                     await send_agent_message_crisp("Ваш запит в обробці. Це може зайняти до 1 хвилини", session_id)
                     thread_openai_id = user_thread_mapping.get(user_id)
+                    print(thread_openai_id)
                     question_name =  user_content_name + ". " + question
                     await send_message_user_async(thread_openai_id, question_name)
                     ai_response = await retrieve_ai_response_async(thread_openai_id)
