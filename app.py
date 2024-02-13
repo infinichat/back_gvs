@@ -2,8 +2,8 @@ import asyncio
 import os
 import aiohttp
 import asyncpg
-from flask import Flask, jsonify, request
-from flask_socketio import SocketIO, emit, join_room
+from flask import Flask, request
+from flask_socketio import SocketIO, join_room
 import requests
 from dotenv import load_dotenv
 from requests.auth import HTTPBasicAuth
@@ -39,8 +39,6 @@ password = os.getenv('crisp_key')
 token = os.getenv('token')
 
 
-first_messages = []
-user_session_mapping = {}
 user_thread_mapping = {}
 
 def start_thread_openai(user_id):
@@ -73,24 +71,6 @@ def start_thread_openai(user_id):
             print("Error starting OpenAI thread:", response.status_code, error_message)
         return None
 
-# user_conversation_state = {}
-# user_first_messages = {}
-# retrieved_session_ids = []
-# user_questions_mapping = {}
-# user_conv_state_mapping = {}
-# qa_state_mapping = {}
-
-
-# @socketio.on('user_id')
-# def handle_join_userid(data):
-#     user_id = data.get('user_id')
-#     print("User id event: " + user_id)
-#     join_room(user_id)
-#     if join_room(user_id):
-#         print(f"User {user_id} successfully joined the room")
-#     else:
-#         print(f"Failed to join the room for user {user_id}")
-
 @socket_io.on('connect')
 def handle_connect():
     print("Connected user")
@@ -109,41 +89,16 @@ def handle_join_userid(data):
 @socket_io.on('set_defaults')
 def handle_init_connection(data):
     user_id_received = data.get('user_id')
-    # join_room(user_id_received)
-    # if join_room(user_id_received):
-    #     print(f"User {user_id_received} successfully joined the room")
-    # else:
-    #     print(f"Failed to join the room for user {user_id_received}")
     print("Emitting created variables")
-    # if user_id_received == "null" or user_id_received is None:
-    #         user_id_received = str(uuid.uuid4())
-    # join_room(user_id_received)
-    # socketio.emit('user_id', {'response': user_id_received})
     print('Received on set_defaults user_id: ' + user_id_received)  # Convert user_id to str
-    # Check if question_answered is provided, otherwise default to False
     question_answered_received = data.get('question_answered')
-    # f question_answered_received == "null" or question_answered_received is None:
-    #     question_answered_received = 'False'i
     print('Received on set_defaults question_answered_received: ' + question_answered_received)
 
     session_id_crisp = data.get('session_crisp')
-    # print('Received on set_defaults session_id_crisp: ' + session_id_crisp)
-    # Check if user_conversation_state is provided, otherwise default to 0
     user_conv_state = data.get('user_conversation_state')
-    # if user_conv_state == "null" or user_conv_state is None:
-    #     user_conv_state = 0
     print('Received on set_defaults user_conv_state: ' + str(user_conv_state))
-
     user_first_msgs = data.get('user_first_messages')
-    # if user_first_msgs == "undefined" or user_first_msgs == "null":
-    #     user_first_msgs = []
     print('Received on set_defaults user_first_msgs: ' + str(user_first_msgs))
-    
-
-
-    # Run asynchronous tasks in the background
-    # socket_io.start_background_task(start_connection_tasks, user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp)
-
 # def start_connection_tasks(user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp):
     handle_connection_async(user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp)
 
@@ -153,24 +108,12 @@ def handle_connection_async(user_id_received, question_answered_received, user_c
 
     if session_id_crisp == "set" or session_id_crisp is None:
         session_id_crisp = start_conversation_crisp()
-        # user_session_mapping[user_id_received] = session_id_crisp
-    # user_session_mapping[user_id_received] = session_id_crisp
-    # session_id = await start_conversation_crisp()
-    # user_session_mapping[user_id_received] = session_id
-    # socketio.emit('set_session_crisp', {'response': session_id}, room = user_id_received)
+    thread_openai_id = start_thread_openai(user_id_received)
+    user_thread_mapping[user_id_received] = thread_openai_id
     print("Assigned session_id: " +  session_id_crisp)
-
-    # retrieved_session_ids.append(session_id_crisp)
-    # parse_user_id(user_id_received, session_id_crisp)
     print(user_id_received, session_id_crisp)
     question_answered = question_answered_received
     print("Assigned question_answered: " + question_answered)
-    # thread_openai_id = start_thread_openai(user_id_received)
-    # # user_thread_mapping[user_id_received] = thread_openai_id
-    # print("Thread openai" + thread_openai_id)
-    # user_questions_mapping[user_id_received] = question_answered_received
-    # print('Mapped question_answer: ' + str(user_questions_mapping[user_id_received]))
-
     try:
         insert_query = sql.SQL("INSERT INTO users_tab (user_id, session_id, question_answered, user_conversation_state) VALUES ({}, {}, {}, {})").format(
             # sql.Literal(''),  # Assuming 'question_value' is not used in your function
@@ -185,10 +128,6 @@ def handle_connection_async(user_id_received, question_answered_received, user_c
         print("Data inserted into the PostgreSQL table.")
     except Exception as e:
         print("Error inserting data into the PostgreSQL table:", e)
-    # finally:
-    #     # Close the cursor and connection
-    #     cursor.close()
-    #     conn.close()
     print("Assigned user_id: " +  user_id_received)
     socket_io.emit('update_variables', {
         'user_id': user_id_received,
@@ -197,17 +136,6 @@ def handle_connection_async(user_id_received, question_answered_received, user_c
         'user_first_messages': user_first_msgs,
         'session_crisp': session_id_crisp
     }, room=user_id_received)
-
-    # Reset state for the new user
-
-    # question_answered[user_id_received] = qa_state_mapping
-    # user_conversation_state[user_id_received] = user_conv_state
-    # print("Assigned user_conversation_state: " + str(user_conversation_state[user_id_received]))
-    # user_first_messages[user_id_received] = user_first_msgs
-    # print("Assigned user_first_messages: " +  str(user_first_messages[user_id_received]))
-
-    
-# asyncio.get_event_loop().run_until_complete(handle_connection_async(user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp))
 
 message_data = {}
 import socketio
@@ -255,12 +183,11 @@ async def message_send_event(message):
     result = cursor.fetchone()
     print(result)
 
-
-            # # Check if there is a result
     if result:
                 user_id, session_id, question_answered, user_conversation_state = result
                 await execute_flow_async(question_value, user_id, session_id, question_answered, user_conversation_state)
                 await handle_user_conversation_state_3(user_id, question_answered, user_conversation_state, question_value, session_id)
+                
 async def message_received_event(message):
     # try:
         print('Got a message from agent: ' + message['content'], message['session_id'], message['fingerprint'])
@@ -296,10 +223,6 @@ async def message_updated_event(message):
 
         if result:
             user_id, session_id, question_answered, user_conversation_state = result
-    #         if session_id in retrieved_session_ids:
-    #             user_id_for_session = next((uid for uid, sid in user_session_mapping.items() if sid == session_id), None)
-
-        #             if user_id_for_session:
             old_message = message_data[fingerprint]
             message_data[fingerprint] = new_message
             socket_io.emit('delete_message', {'user_id': user_id, 'message': old_message}, room=user_id)
@@ -307,7 +230,7 @@ async def message_updated_event(message):
             socket_io.emit('start', {'user_id': user_id, 'message': new_message}, room=user_id)
         else:
                 print(f"No message found for fingerprint: {fingerprint}")
-        # pass
+
 async def message_removed_event(message):
         session_id = message['session_id']
         fingerprint = message['fingerprint']
@@ -322,10 +245,7 @@ async def message_removed_event(message):
 
         if result:
             user_id, session_id, question_answered, user_conversation_state = result
-#             if session_id in retrieved_session_ids:
-#                 user_id_for_session = next((uid for uid, sid in user_session_mapping.items() if sid == session_id), None)
 
-#                 if user_id_for_session:
             if fingerprint in message_data:
                         del_message = message_data[fingerprint]
 
@@ -337,11 +257,6 @@ async def message_removed_event(message):
                         print(f"Message to delete: {del_message}")
             else:
                         print(f"No message found for fingerprint: {fingerprint}")
-#                     pass 
-
-# # async def message_removed_event(message):
-# #     print('Got a removed message: ' + message['fingerprint'], message['session_id']);
-
    
 async def on_disconnect():
     print("RTM API disconnected")
@@ -395,30 +310,14 @@ async def main():
         finally:
             await client.disconnect()
 
-# # loop = asyncio.get_event_loop()
-# # try:
-# #     asyncio.ensure_future(main())
-# #     loop.run_forever()
-# # except KeyboardInterrupt:
-# #     pass
-# # finally:
-# #     print("Closing loop")
-# #     loop.close()
 def start_main_tasks():
     asyncio.run(main())
 
 socket_io.start_background_task(start_main_tasks)
 
-# def start_main_tasks():
-#     asyncio.run(main())
-
-
 @socket_io.on('disconnect')
 def handle_disconnect():
     print('Client disconnected')  
-
-
-# import requests
 
 def start_conversation_crisp():
     basic_auth_credentials = (username, password)
@@ -446,11 +345,7 @@ def start_conversation_crisp():
 
 
 def send_user_message_crisp(question, session_id):
-    # session_id = start_conversation_crisp()
-    # website_id = os.getenv("website_id")
     api_url = f"https://api.crisp.chat/v1/website/{website_id}/conversation/{session_id}/message"
-    # username = os.getenv("crisp_identifier")
-    # password = os.getenv("crisp_key")
     basic_auth_credentials=(username, password)
     headers = {
         'Content-Type': 'application/json',
@@ -476,19 +371,11 @@ def send_user_message_crisp(question, session_id):
         print(f"Request failed with status code {response.status_code}.")
         print(response.text)
 
-
-# global_fingerprint = None
-
 import aiohttp
 
 async def send_agent_message_crisp(response, session_id):
     global global_fingerprint
-    # session_id = start_conversation_crisp()
-    # website_id = os.getenv("website_id")
     api_url = f"https://api.crisp.chat/v1/website/{website_id}/conversation/{session_id}/message"
-    # username = os.getenv("crisp_identifier")
-    # password = os.getenv("crisp_key")
-    # alert = "http://127.0.0.1:5000/edit"
     basic_auth_credentials = (username, password)
     headers = {
         'Content-Type': 'application/json',
@@ -526,35 +413,6 @@ def receive_msg_from_client(data):
 
     if session_id:
         send_user_message_crisp(question_value, session_id)
-
-# @app.route('/', methods=['POST', 'GET'])
-# async def receive_msg_from_client():
-#     if request.method == 'POST':
-#         if request.is_json:
-#             data = request.get_json()
-#             print("Received JSON data:", data)
-
-
-#                      # Extract the value of "question" directly
-#             question_value = data.get('question', 'Question not found')
-#             # user_id = data.get('user_id', 'User id not found')
-#             #         # print("Received user_id with post request: " + user_id)
-#             # print("Received question with post request: " + question_value)
-#                     # session_id = user_session_mapping.get(user_id)
-#             session_id = data.get('session_id')
-#             # print("Received session_id with post request: " + session_id)
-#             # question_answered = data.get('question_answered')
-#             # print("Received question_answered with post request: " + question_answered)
-#             # user_conversation_state = data.get('user_conversation_state')
-#             # print("Received user_coonversation_state with post request: " + user_conversation_state)
-
-#             if session_id:
-#                         send_user_message_crisp(question_value, session_id)
-#                         # await execute_flow_async(question_value, user_id, session_id, question_answered, user_conversation_state)
-#                         # await handle_user_conversation_state_3(user_id, question_answered, user_conversation_state, question_value, session_id)
-                    
-#                     # Return the value of "question" directly
-#             return jsonify(question_value)
 
 
 async def send_message_user_async(thread_openai_id, question):
@@ -718,9 +576,6 @@ async def query_with_caching(question):
 
 # # Modify patch_profile to accept nickname and phone_number as arguments
 async def patch_profile_async(nickname, phone_number, session_id):
-    # website_id = os.getenv("website_id")
-    # username = os.getenv("crisp_identifier")
-    # password = os.getenv("crisp_key")
     basic_auth_credentials = aiohttp.BasicAuth(username, password)
     api_url = f"https://api.crisp.chat/v1/website/{website_id}/conversation/{session_id}/meta"
     headers = {
@@ -751,8 +606,6 @@ async def patch_profile_async(nickname, phone_number, session_id):
         print(f"Aiohttp Client Error: {err}")
     except aiohttp.ClientConnectionError as errc:
         print(f"Error Connecting: {errc}")
-    # except aiohttp.ClientTimeout as errt:
-    #     print(f"Timeout Error: {errt}")
     except aiohttp.ClientResponseError as errh:
         print(f"HTTP Error: {errh}")
     except Exception as err:
@@ -760,9 +613,6 @@ async def patch_profile_async(nickname, phone_number, session_id):
 
 
 async def check_conversation(session_id):
-    # website_id = os.getenv("website_id")
-    # username = os.getenv("crisp_identifier")
-    # password = os.getenv("crisp_key")
     basic_auth_credentials = aiohttp.BasicAuth(login=username, password=password)
     api_url = f"https://api.crisp.chat/v1/website/{website_id}/conversation/{session_id}/messages"
     headers = {
@@ -787,12 +637,6 @@ async def check_conversation(session_id):
                         found_name_question = True
                     elif found_name_question and item.get("from") == "user":
                         user_content_after_name = item["content"]
-
-                        # return user_content_after_name
-                        # user_name_thread = user_content_after_name
-                        # print('Sending the name of the user to a thread ' + user_name_thread)
-                        # # thread_openai_id = user_thread_mapping.get(user_id)
-                        # await send_message_user_async(thread_openai_id, user_name_thread)
                         print("User's message after 'What is your name?':", user_content_after_name)
                         break
 
@@ -868,11 +712,6 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
                 conn.commit()
 
             if question_answered == 'False' and user_conversation_state == '1':
-                #  user_first_msgs.append(question)
-                # user_first_messages[user_id] = user_first_msgs
-                # print("User first message: " + str(user_first_msgs))
-                # print("User first message: " + user_first_msgs[0])
-                # socketio.emit('start', {'user_id': user_id, 'message': "Вкажіть будь ласка свій номер телефону для подальшого зв'язку з Вами."}, room=user_id)
                 await send_agent_message_crisp("Вкажіть будь ласка свій номер телефону для подальшого зв'язку з Вами.", session_id)
                 user_conversation_state = 2
 
@@ -883,37 +722,24 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
                     )
                 cursor.execute(update_query)
                 conn.commit()
-                # select_query = sql.SQL("SELECT user_id, session_id, question_answered, user_conversation_state FROM users_tab WHERE user_id = {} AND session_id = {}").format(
-                #     sql.Literal(user_id),
-                #     sql.Literal(session_id)
-                # )
-                # cursor.execute(select_query)
-                # result = cursor.fetchone()
 
                 print("Emitting the updated variables")
                 socket_io.emit('update_variables', {
                     'user_id': user_id,
                     'question_answered': question_answered,
                     'user_conversation_state': user_conversation_state,
-                    # 'user_first_messages': question,
                     'session_crisp': session_id,
                 }, room=user_id)
 
             if question_answered == 'False' and user_conversation_state == '2':
-                #  user_first_msgs.append(question)
-                # user_first_messages[user_id] = user_first_msgs
-                # print("User first message: " + str(user_first_msgs))
                 await send_agent_message_crisp("Ваш запит в обробці. Це може зайняти до 1 хвилини", session_id)
-                # user_conversation_state = '3'
                 print("Emitting the updated variables")
                 socket_io.emit('update_variables', {
                     'user_id': user_id,
                     'question_answered': question_answered,
                     'user_conversation_state': user_conversation_state,
-                    # 'user_first_messages': question,
                     'session_crisp': session_id,
                 }, room=user_id)
-                # socketio.emit('start', {'user_id': user_id, 'message': 'Ваш запит в обробці. Це може зайняти до 1 хвилини'}, room=user_id)
                 select_query = sql.SQL("SELECT question_value FROM users_tab WHERE user_id = {} AND session_id = {}").format(
                     sql.Literal(user_id),
                     sql.Literal(session_id)
@@ -930,30 +756,23 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
                 print(cached_response)
                 thread_openai_id = user_thread_mapping.get(user_id)
                 user_content_name = await check_conversation(session_id)
-                # await check_conversation(session_id)
                 if cached_response:
-                    # socketio.emit('start', {'user_id': user_id, 'message': cached_response}, room=user_id)
                     await send_agent_message_crisp(cached_response, session_id)
                 else:
                     print('Going into the condition')
                     await send_agent_message_crisp("Ваш запит в обробці. Це може зайняти до 1 хвилини", session_id)
-                    # socketio.emit('start', {'user_id': user_id, 'message': 'Ваш запит в обробці. Це може зайняти до 1 хвилини'}, room=user_id)
                     thread_openai_id = user_thread_mapping.get(user_id)
-                    # user_content_name = await check_conversation(session_id)
                     question_name =  user_content_name + ". " + question
                     await send_message_user_async(thread_openai_id, question_name)
                     ai_response = await retrieve_ai_response_async(thread_openai_id)
                     if ai_response:
                         await send_agent_message_crisp(ai_response, session_id)
-
-                        # `socketio.emit('start', {'user_id': user_id, 'message': ai_response}, room=user_id)`
                 user_conversation_state = 3
                 question_answered = 'True'
                 socket_io.emit('update_variables', {
                     'user_id': user_id,
                     'question_answered': question_answered,
                     'user_conversation_state': user_conversation_state,
-                    # 'user_first_messages': question,
                     'session_crisp': session_id,
                 }, room=user_id)
 
@@ -969,18 +788,11 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
 
 
                 return
-        
-        # elif question_answered == 'True' and user_conversation_state == '3':
-        #     await handle_user_conversation_state_3(user_id, question_answered, user_conversation_state, question, session_id)
     except Exception as e:
         print(f"Error: {str(e)}")
         socket_io.emit('start', {'user_id': user_id, 'message': 'Щось пішло не так, спробуйте пізніше...'}, room=user_id)
 
 async def handle_user_conversation_state_3(user_id, question_answered, user_conversation_state, question, session_id):
-    # user_session_mapping[user_id] = session_id
-    # retrieved_session_ids.append(session_id)
-    # parse_user_id(user_id, session_id)
-    # send_user_message_crisp(question, session_id)
     print(user_id, session_id)
     print(question)
     print("Mapped session_id to user_id")
@@ -989,18 +801,15 @@ async def handle_user_conversation_state_3(user_id, question_answered, user_conv
             cached_response = await query_with_caching(question)
 
             if cached_response:
-                # socketio.emit('start', {'user_id': user_id, 'message': cached_response}, room=user_id)
                 await send_agent_message_crisp(cached_response, session_id)
             else:
                 user_content_name = await check_conversation(session_id)
                 question_name = user_content_name + ". " + question
                 print(question_name)
-                # socketio.emit('start', {'user_id': user_id, 'message': 'Ваш запит в обробці. Це може зайняти до 1 хвилини'}, room=user_id)
                 thread_openai_id = user_thread_mapping.get(user_id)
                 await send_message_user_async(thread_openai_id, question_name)
                 ai_response = await retrieve_ai_response_async(thread_openai_id)
                 if ai_response:
-                    # socketio.emit('start', {'user_id': user_id, 'message': ai_response}, room=user_id)
                     await send_agent_message_crisp(ai_response, session_id)
 
     except Exception as e:
