@@ -38,11 +38,12 @@ username = os.getenv('crisp_identifier')
 password = os.getenv('crisp_key')
 token = os.getenv('token')
 
-
 user_thread_mapping = {}
 
-def start_thread_openai(user_id):
-    global thread_openai_id
+import aiohttp
+
+async def start_thread_openai(user_id):
+    global thread_openai_id  # Note: Global variables in async functions should be avoided if possible
     api_url = "https://api.openai.com/v1/threads"
     headers = {
         "OpenAI-Beta": "assistants=v1",
@@ -51,25 +52,26 @@ def start_thread_openai(user_id):
         "Authorization": f"Bearer {token}"
     }
 
-    response = requests.post(
-        api_url,
-        headers=headers,
-        json={},
-    )
-
-    if response.status_code == 200:
-        data = response.json()
-        thread_openai_id = data.get("id")
-        print("Thread started successfully! Thread id:", thread_openai_id)
-        return thread_openai_id
-    elif response.status_code == 401:  # Unauthorized (Invalid API key)
-        error_message = response.json().get("error", {}).get("message", "")
-        if "Incorrect API key provided" in error_message:
-            print("Error starting OpenAI thread: Incorrect API key provided")
-            socket_io.emit('start', {'user_id': user_id, 'message': "Технічні неполадки. Відповімо скоро"})
-        else:
-            print("Error starting OpenAI thread:", response.status_code, error_message)
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(api_url, headers=headers, json={}) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    thread_openai_id = data.get("id")
+                    print("Thread started successfully! Thread id:", thread_openai_id)
+                    return thread_openai_id
+                elif response.status == 401:  # Unauthorized (Invalid API key)
+                    error_message = (await response.json()).get("error", {}).get("message", "")
+                    if "Incorrect API key provided" in error_message:
+                        print("Error starting OpenAI thread: Incorrect API key provided")
+                        socket_io.emit('start', {'user_id': user_id, 'message': "Технічні неполадки. Відповімо скоро"})
+                    else:
+                        print("Error starting OpenAI thread:", response.status, error_message)
+                    return None
+    except aiohttp.ClientError as err:
+        print(f"HTTP Error: {err}")
         return None
+
 
 user_sid_mapping = {}
 del_messages_map = {}
@@ -189,8 +191,8 @@ def handle_connection_async(user_id_received, question_answered_received, user_c
 
     if session_id_crisp == "set" or session_id_crisp is None:
         session_id_crisp = start_conversation_crisp()
-    thread_openai_id = start_thread_openai(user_id_received)
-    user_thread_mapping[user_id_received] = thread_openai_id
+    # thread_openai_id = await start_thread_openai(user_id_received)
+    # user_thread_mapping[user_id_received] = thread_openai_id
     print("Assigned session_id: " +  session_id_crisp)
     print(user_id_received, session_id_crisp)
     question_answered = question_answered_received
@@ -989,18 +991,14 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
                 cached_response = await query_with_caching(question_value)
                 print("User first message to retrieve in this phase: " + question_value)
                 print(cached_response)
-                if thread_openai_id:
-                    thread_openai_id = user_thread_mapping.get(user_id)
-                else: 
-                    thread_openai_id = start_thread_openai(user_id)
-                print(thread_openai_id)
                 user_content_name = await check_conversation(session_id)
                 if cached_response:
                     await send_agent_message_crisp(cached_response, session_id)
                 else:
                     print('Going into the condition')
                     await send_agent_message_crisp("Ваш запит в обробці. Це може зайняти до 1 хвилини", session_id)
-                    thread_openai_id = user_thread_mapping.get(user_id)
+                    thread_openai_id = await start_thread_openai(user_id)
+                    user_thread_mapping[user_id] = thread_openai_id
                     print(thread_openai_id)
                     question_name =  user_content_name + ". " + question
                     await send_message_user_async(thread_openai_id, question_name)
@@ -1072,6 +1070,14 @@ async def handle_user_conversation_state_3(user_id, question_answered, user_conv
                 question_name = user_content_name + ". " + question
                 print(question_name)
                 thread_openai_id = user_thread_mapping.get(user_id)
+
+                if thread_openai_id is None:
+                    # Thread ID not found in the mapping, start a new thread
+                    thread_openai_id = await start_thread_openai(user_id)
+
+                    # Update the user_thread_mapping with the new thread_openai_id
+                    user_thread_mapping[user_id] = thread_openai_id
+
                 await send_message_user_async(thread_openai_id, question_name)
                 ai_response = await retrieve_ai_response_async(thread_openai_id)
                 if ai_response:
