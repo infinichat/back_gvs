@@ -71,20 +71,101 @@ def start_thread_openai(user_id):
             print("Error starting OpenAI thread:", response.status_code, error_message)
         return None
 
+user_sid_mapping = {}
+del_messages_map = {}
+edit_messages_map = {}
+
 @socket_io.on('connect')
 def handle_connect():
     print("Connected user")
 
+
 @socket_io.on('user_id')
 def handle_join_userid(data):
+    global cursor, conn
     user_id = data.get('user_id')
-    print("User id event: " + user_id)
-
-    if user_id not in socket_io.server.rooms(request.sid):
-        join_room(user_id)
-        print(f"User {user_id} successfully joined the room")
+    user_sid = request.sid
+    if user_id in user_sid_mapping:
+        # If user_id exists, append the new user_sid to the list
+        user_sid_mapping[user_id].append(user_sid)
     else:
-        print(f"User {user_id} is already in the room")
+        # If user_id does not exist, create a new list with the current user_sid
+        user_sid_mapping[user_id] = [user_sid]
+    join_room(user_id)
+    print(f"User {user_id} successfully joined the room")
+    print("User id event: " + user_id)
+    try: 
+        select_messages_query = sql.SQL("SELECT message_content, fingerprint FROM deactivated_messages WHERE user_id = {}").format(
+            sql.Literal(user_id)
+        )
+        try:
+            cursor.execute(select_messages_query)
+        except psycopg2.Error as exc:
+            print(exc)
+            cursor.close()
+            conn.close()
+
+            conn = psycopg2.connect(**db_config_2)
+            cursor = conn.cursor()
+
+            cursor.execute(select_messages_query)
+
+        messages_result = cursor.fetchall()
+
+        for message in messages_result:
+            message_content = message
+            print(message_content)
+            # user_sid = request.sid
+            # user_sid_mapping[user_id] = user_sid
+                # join_room(user_id)
+            socket_io.emit('start', {'user_id': user_id, 'message': message_content}, room=user_id)
+
+        if user_id in del_messages_map:
+                # del_messages_map[user_id] = []
+
+            # Append the del_message to the list
+                del_message = del_messages_map[user_id]
+                if del_message:
+                    socket_io.emit('delete_message', {'user_id': user_id, 'message': del_message}, room=user_id)
+                    print("Message to delete: " + del_message)
+            # Clear the del_messages for the user_id since they have been emitted
+                del del_messages_map[user_id]
+        
+        if user_id in edit_messages_map:
+                # del_messages_map[user_id] = []
+
+            # Append the del_message to the list
+                edit_message = edit_messages_map[user_id]
+                if edit_message:
+                        socket_io.emit('start', {'user_id': user_id, 'message': edit_message}, room=user_id)
+            # Clear the del_messages for the user_id since they have been emitted
+                del edit_messages_map[user_id]
+        
+        # Optionally, you can delete the retrieved messages from the database after processing
+                
+        delete_messages_query = sql.SQL("DELETE FROM deactivated_messages WHERE user_id = {}").format(
+            sql.Literal(user_id)
+        )
+        try:
+            cursor.execute(delete_messages_query)
+            conn.commit()
+        except psycopg2.Error as exc:
+            print(exc)
+            cursor.close()
+            conn.close()
+
+            conn = psycopg2.connect(**db_config_2)
+            cursor = conn.cursor()
+
+            cursor.execute(delete_messages_query)
+            conn.commit()
+
+    except psycopg2.Error as e:
+    # Handle the exception as needed
+        if "no results to fetch" in str(e):
+            print("No messages to fetch.")
+
+
 
 @socket_io.on('set_defaults')
 def handle_init_connection(data):
@@ -126,6 +207,16 @@ def handle_connection_async(user_id_received, question_answered_received, user_c
         cursor.execute(insert_query)
         conn.commit()
         print("Data inserted into the PostgreSQL table.")
+    except psycopg2.Error as exc:
+        print(exc)
+        cursor.close()
+        conn.close()
+
+        conn = psycopg2.connect(**db_config_2)
+        cursor = conn.cursor()
+
+        cursor.execute(insert_query)
+        conn.commit()
     except Exception as e:
         print("Error inserting data into the PostgreSQL table:", e)
     print("Assigned user_id: " +  user_id_received)
@@ -170,6 +261,7 @@ async def unauthorized(data):
     print(data)
 
 async def message_send_event(message):
+    global cursor, conn
     print('Got a message from user:', message['content'], message['session_id'], message['fingerprint'])
     
     question_value = message['content']
@@ -178,8 +270,18 @@ async def message_send_event(message):
     select_query = sql.SQL("SELECT user_id, session_id, question_answered, user_conversation_state FROM users_tab WHERE session_id = {}").format(
         sql.Literal(session_id)
     )
-    
-    cursor.execute(select_query)
+    try:  
+        cursor.execute(select_query)
+
+    except psycopg2.Error as exc:
+            print(str(exc))
+            cursor.close()
+            conn.close()
+
+            conn = psycopg2.connect(**db_config_2)
+            cursor = conn.cursor()
+
+            cursor.execute(select_query)
     result = cursor.fetchone()
     print(result)
 
@@ -187,31 +289,128 @@ async def message_send_event(message):
                 user_id, session_id, question_answered, user_conversation_state = result
                 await execute_flow_async(question_value, user_id, session_id, question_answered, user_conversation_state)
                 await handle_user_conversation_state_3(user_id, question_answered, user_conversation_state, question_value, session_id)
-                
+
+@socket_io.on('disconnect')
+def handle_disconnect():
+    sid = request.sid
+    print(f'Client disconnected: sid={sid}')
+
+    # Iterate over the items in user_sid_mapping to find and remove the disconnected user_id
+    for user_id, sid_list in list(user_sid_mapping.items()):
+        if sid in sid_list:
+            sid_list.remove(sid)
+            print(f"Removed sid {sid} from user {user_id}'s list of sids")
+
+            # If the user_id's list of sids is empty, remove the user_id from user_sid_mapping
+            if not sid_list:
+                del user_sid_mapping[user_id]
+                print(f"Removed user {user_id} from user_sid_mapping")
+
+            break
+
 async def message_received_event(message):
-    # try:
-        print('Got a message from agent: ' + message['content'], message['session_id'], message['fingerprint'])
-        session_id = message['session_id']
-        fingerprint = message['fingerprint']
+    global cursor, conn
+    print('Got a message from agent: ' + message['content'], message['session_id'], message['fingerprint'])
+    session_id = message['session_id']
+    fingerprint = message['fingerprint']
 
-        select_query = sql.SQL("SELECT user_id, session_id, question_answered, user_conversation_state FROM users_tab WHERE session_id = {}").format(
+        # Check if the client is in the set of disconnected clients
+    select_query = sql.SQL("SELECT user_id, session_id, question_answered, user_conversation_state FROM users_tab WHERE session_id = {}").format(
             sql.Literal(session_id)
-        )
+    )
+    try: 
+            cursor.execute(select_query)
+    except psycopg2.Error as exc:
+            print(str(exc))
+            cursor.close()
+            conn.close()
 
-        cursor.execute(select_query)
-        result = cursor.fetchone()
-        print(result)
+            conn = psycopg2.connect(**db_config_2)
+            cursor = conn.cursor()
 
-        if result:
-            user_id, session_id, question_answered, user_conversation_state = result
-            message_data[fingerprint] = message['content']
-            socket_io.emit('start', {'user_id': user_id, 'message': message['content']}, room=user_id)
+            cursor.execute(select_query)
+    result = cursor.fetchone()
+    print(result)
+
+    if result:
+                user_id, session_id, question_answered, user_conversation_state = result
+
+                # Check if user_id is not in user_sid_mapping
+                if user_id not in user_sid_mapping or not user_sid_mapping[user_id]:
+                    print(f"User {user_id} is not connected. The message won't be emitted.")
+                    insert_query = sql.SQL("INSERT INTO deactivated_messages(user_id, message_content, fingerprint, session_id) VALUES ({}, {}, {}, {})").format(
+                        sql.Literal(user_id),
+                        sql.Literal(message['content']),
+                        sql.Literal(fingerprint),
+                        sql.Literal(session_id)
+                    )
+                    cursor.execute(insert_query)
+                    # Commit the transaction
+                    conn.commit()
+                    message_data[fingerprint] = message['content']
+
+                    return
+
+                message_data[fingerprint] = message['content']
+                socket_io.emit('start', {'user_id': user_id, 'message': message['content']}, room=user_id)
+
 
 async def message_updated_event(message):
+    global cursor, conn
     print('Got a updated message: ' + message['content'], message['fingerprint']);
     fingerprint = message['fingerprint']
     new_message = message['content']
     session_id = message['session_id']
+    if fingerprint in message_data:
+        select_query = sql.SQL("SELECT user_id, session_id, question_answered, user_conversation_state FROM users_tab WHERE session_id = {}").format(
+                sql.Literal(session_id)
+            )
+
+        try:
+            cursor.execute(select_query)
+        
+        except psycopg2.Error as exc:
+                print(str(exc))
+                cursor.close()
+                conn.close()
+
+                conn = psycopg2.connect(**db_config_2)
+                cursor = conn.cursor()
+
+                cursor.execute(select_query)
+
+        result = cursor.fetchone()
+        print(result)
+
+        if result:
+                user_id, session_id, question_answered, user_conversation_state = result  
+        if user_id not in user_sid_mapping or not user_sid_mapping[user_id]:
+                    print(f"User {user_id} is not connected. The edited message won't be emited.")
+                    old_message = message_data[fingerprint]
+                    # Update the message content in the dictionary
+                    message_data[fingerprint] = new_message
+
+                    print(old_message)
+                    print(new_message)
+
+                    # Update the message content in the database table
+                    update_query = sql.SQL("UPDATE deactivated_messages SET message_content = {} WHERE user_id = {} AND message_content = {}").format(
+                        sql.Literal(new_message),
+                        sql.Literal(user_id),
+                        sql.Literal(old_message)
+                        # sql.Literal(str(fingerprint))
+                    )
+                    cursor.execute(update_query)
+                    if cursor.rowcount > 0:
+                        print(f"{cursor.rowcount} row(s) deleted.")
+                    else:
+                        print("No rows deleted.")
+                        del_messages_map[user_id] = old_message
+                        edit_messages_map[user_id] = new_message
+                    # Commit the transaction
+                    conn.commit()
+                    return
+    
     if fingerprint in message_data:
         select_query = sql.SQL("SELECT user_id, session_id, question_answered, user_conversation_state FROM users_tab WHERE session_id = {}").format(
             sql.Literal(session_id)
@@ -222,7 +421,7 @@ async def message_updated_event(message):
         print(result)
 
         if result:
-            user_id, session_id, question_answered, user_conversation_state = result
+            user_id, session_id, question_answered, user_conversation_state = result  
             old_message = message_data[fingerprint]
             message_data[fingerprint] = new_message
             socket_io.emit('delete_message', {'user_id': user_id, 'message': old_message}, room=user_id)
@@ -231,15 +430,28 @@ async def message_updated_event(message):
         else:
                 print(f"No message found for fingerprint: {fingerprint}")
 
+
 async def message_removed_event(message):
+        global cursor, conn
         session_id = message['session_id']
         fingerprint = message['fingerprint']
 
         select_query = sql.SQL("SELECT user_id, session_id, question_answered, user_conversation_state FROM users_tab WHERE session_id = {}").format(
             sql.Literal(session_id)
         )
+        try: 
+            cursor.execute(select_query)
+        
+        except psycopg2.Error as exc:
+                print(str(exc))
+                cursor.close()
+                conn.close()
 
-        cursor.execute(select_query)
+                conn = psycopg2.connect(**db_config_2)
+                cursor = conn.cursor()
+
+                cursor.execute(select_query)
+
         result = cursor.fetchone()
         print(result)
 
@@ -247,6 +459,27 @@ async def message_removed_event(message):
             user_id, session_id, question_answered, user_conversation_state = result
 
             if fingerprint in message_data:
+                        if user_id not in user_sid_mapping or not user_sid_mapping[user_id]:
+                                print(f"User {user_id} is not connected. The deleted message won't be emited.")
+                                del_message = message_data[fingerprint]
+
+                                # Update the message content in the database table
+                                delete_query = sql.SQL("DELETE FROM deactivated_messages WHERE user_id = {} AND fingerprint = {} AND message_content = {}").format(
+                                    sql.Literal(user_id),
+                                    sql.Literal(str(fingerprint)),
+                                    sql.Literal(del_message)
+                                )
+                                cursor.execute(delete_query)
+
+                                if cursor.rowcount > 0:
+                                    print(f"{cursor.rowcount} row(s) deleted.")
+                                else:
+                                    print("No rows deleted.")
+                                    del_messages_map[user_id] = del_message
+                                # Commit the transaction
+                                conn.commit()
+                                return
+                        
                         del_message = message_data[fingerprint]
 
                         print("User id to submit delete message: " + user_id)
@@ -315,9 +548,10 @@ def start_main_tasks():
 
 socket_io.start_background_task(start_main_tasks)
 
-@socket_io.on('disconnect')
-def handle_disconnect():
-    print('Client disconnected')  
+# @socket_io.on('disconnect')
+# def handle_disconnect():
+#     print('Client disconnected')
+
 
 def start_conversation_crisp():
     basic_auth_credentials = (username, password)
@@ -687,6 +921,7 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
 
                     except psycopg2.Error as e:
         # Handle the exception, print the error message, and optionally rollback the transaction
+                        
                         print(f"Error: {e}")
                         conn.rollback()
 
@@ -754,7 +989,10 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
                 cached_response = await query_with_caching(question_value)
                 print("User first message to retrieve in this phase: " + question_value)
                 print(cached_response)
-                thread_openai_id = user_thread_mapping.get(user_id)
+                if thread_openai_id:
+                    thread_openai_id = user_thread_mapping.get(user_id)
+                else: 
+                    thread_openai_id = start_thread_openai(user_id)
                 print(thread_openai_id)
                 user_content_name = await check_conversation(session_id)
                 if cached_response:
