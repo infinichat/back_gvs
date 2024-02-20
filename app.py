@@ -1032,6 +1032,31 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
         print(f"Error: {str(e)}")
         socket_io.emit('start', {'user_id': user_id, 'message': 'Щось пішло не так, спробуйте пізніше...'}, room=user_id)
 
+
+async def get_conversation_metas(session_id):
+    basic_auth_credentials = aiohttp.BasicAuth(login=username, password=password)
+    api_url = f"https://api.crisp.chat/v1/website/{website_id}/conversation/{session_id}/meta"
+    headers = {
+        'Content-Type': 'application/json',
+        'User-Agent': 'PostmanRuntime/7.35.0',
+        'X-Crisp-Tier': 'plugin'
+    }
+
+    try:
+        async with aiohttp.ClientSession(auth=basic_auth_credentials) as session:
+            async with session.get(api_url, headers=headers) as response:
+                response.raise_for_status()  # Raise an HTTPError for bad responses (4xx and 5xx)
+                data = await response.json()
+
+                data_get = data.get("data", [0])
+                user_nickname = data_get["nickname"]
+                if user_nickname is not None:
+                        print(user_nickname)
+                        return user_nickname           
+        
+    except aiohttp.ClientError as err:
+        print(f"HTTP Error: {err}")
+
 async def handle_user_conversation_state_3(user_id, question_answered, user_conversation_state, question, session_id):
     print(user_id, session_id)
     print(question)
@@ -1043,7 +1068,7 @@ async def handle_user_conversation_state_3(user_id, question_answered, user_conv
             if cached_response:
                 await send_agent_message_crisp(cached_response, session_id)
             else:
-                user_content_name = await check_conversation(session_id)
+                user_content_name = await get_conversation_metas(session_id)
                 question_name = user_content_name + ". " + question
                 print(question_name)
                 thread_openai_id = user_thread_mapping.get(user_id)
