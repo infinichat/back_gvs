@@ -188,7 +188,7 @@ def handle_init_connection(data):
 conn = psycopg2.connect(**db_config_2)
 cursor = conn.cursor()
 def handle_connection_async(user_id_received, question_answered_received, user_conv_state, user_first_msgs, session_id_crisp):
-
+    global cursor, conn
     if session_id_crisp == "set" or session_id_crisp is None:
         session_id_crisp = start_conversation_crisp()
     # thread_openai_id = await start_thread_openai(user_id_received)
@@ -892,6 +892,7 @@ async def check_conversation(session_id):
         print(f"HTTP Error: {err}")
 
 async def execute_flow_async(message, user_id, session_id, question_answered, user_conversation_state):
+    global cursor, conn
     print("Question answered in execute_flow " + str(question_answered))
     print("User conversation state " + str(user_conversation_state))
     question = message
