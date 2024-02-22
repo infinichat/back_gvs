@@ -15,7 +15,7 @@ from psycopg2 import sql
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 #  message_queue='redis://'
-socket_io = SocketIO(app, cors_allowed_origins='*')
+socket_io = SocketIO(app, cors_allowed_origins='*', ping_timeout = 5, ping_interval = 10)
 
 load_dotenv()
 
@@ -1061,6 +1061,7 @@ async def handle_user_conversation_state_3(user_id, question_answered, user_conv
     print("Mapped session_id to user_id")
     try:
            if question_answered == 'True' and user_conversation_state == '3':
+            await send_agent_message_crisp("Ваш запит в обробці. Це може зайняти до 1 хвилини", session_id)
             cached_response = await query_with_caching(question)
 
             if cached_response:
