@@ -39,7 +39,7 @@ password = os.getenv('crisp_key')
 token = os.getenv('token')
 
 user_thread_mapping = {}
-
+user_thread_mapping_session_id = {}
 import aiohttp
 
 async def start_thread_openai(user_id):
@@ -65,6 +65,38 @@ async def start_thread_openai(user_id):
                     if "Incorrect API key provided" in error_message:
                         print("Error starting OpenAI thread: Incorrect API key provided")
                         socket_io.emit('start', {'user_id': user_id, 'message': "Технічні неполадки. Відповімо скоро"})
+                    else:
+                        print("Error starting OpenAI thread:", response.status, error_message)
+                    return None
+    except aiohttp.ClientError as err:
+        print(f"HTTP Error: {err}")
+        return None
+
+async def start_thread_openai_session_id(session_id):
+    global thread_openai_id  # Note: Global variables in async functions should be avoided if possible
+    api_url = "https://api.openai.com/v1/threads"
+    headers = {
+        "OpenAI-Beta": "assistants=v1",
+        "User-Agent": "PostmanRuntime/7.34.0",
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {token}"
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(api_url, headers=headers, json={}) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    thread_openai_id = data.get("id")
+                    print("Thread started successfully! Thread id:", thread_openai_id)
+                    return thread_openai_id
+                elif response.status == 401:  # Unauthorized (Invalid API key)
+                    error_message = (await response.json()).get("error", {}).get("message", "")
+                    if "Incorrect API key provided" in error_message:
+                         message = "Технічні неполадки. Відповімо незабаром."
+                         await send_agent_message_crisp(message, session_id)
+                    #     print("Error starting OpenAI thread: Incorrect API key provided")
+                    #     socket_io.emit('start', {'user_id': user_id, 'message': "Технічні неполадки. Відповімо скоро"})
                     else:
                         print("Error starting OpenAI thread:", response.status, error_message)
                     return None
@@ -115,7 +147,7 @@ def handle_join_userid(data):
         messages_result = cursor.fetchall()
 
         for message in messages_result:
-            message_content = message
+            message_content = message[0] 
             print(message_content)
             # user_sid = request.sid
             # user_sid_mapping[user_id] = user_sid
@@ -221,6 +253,7 @@ def handle_connection_async(user_id_received, question_answered_received, user_c
         conn.commit()
     except Exception as e:
         print("Error inserting data into the PostgreSQL table:", e)
+        pass
     print("Assigned user_id: " +  user_id_received)
     socket_io.emit('update_variables', {
         'user_id': user_id_received,
@@ -286,12 +319,12 @@ async def message_send_event(message):
             cursor.execute(select_query)
     result = cursor.fetchone()
     print(result)
-
     if result:
-                user_id, session_id, question_answered, user_conversation_state = result
-                await execute_flow_async(question_value, user_id, session_id, question_answered, user_conversation_state)
-                await handle_user_conversation_state_3(user_id, question_answered, user_conversation_state, question_value, session_id)
-
+        user_id, session_id, question_answered, user_conversation_state = result
+        await execute_flow_async(question_value, user_id, session_id, question_answered, user_conversation_state)
+        await handle_user_conversation_state_3(user_id, question_answered, user_conversation_state, question_value, session_id)
+    else: 
+        await handle_user_conversation_result(message, session_id)
 @socket_io.on('disconnect')
 def handle_disconnect():
     sid = request.sid
@@ -549,6 +582,7 @@ def start_main_tasks():
     asyncio.run(main())
 
 socket_io.start_background_task(start_main_tasks)
+
 
 # @socket_io.on('disconnect')
 # def handle_disconnect():
@@ -1088,6 +1122,37 @@ async def handle_user_conversation_state_3(user_id, question_answered, user_conv
     except Exception as e:
         print(f"Error: {str(e)}")
         socket_io.emit('start', {'user_id': user_id, 'message': 'Щось пішло не так, спробуйте пізніше...'}, room=user_id)
+
+async def handle_user_conversation_result(question, session_id):
+    print(session_id)
+    print(question)
+    try:
+            await send_agent_message_crisp("Ваш запит в обробці. Це може зайняти до 1 хвилини", session_id)
+            cached_response = await query_with_caching(question)
+
+            if cached_response:
+                await send_agent_message_crisp(cached_response, session_id)
+            else:
+                user_content_name = await get_conversation_metas(session_id)
+                question_name = user_content_name + ". " + question
+                print(question_name)
+                thread_openai_id = user_thread_mapping_session_id.get(session_id)
+
+                if thread_openai_id is None:
+                    # Thread ID not found in the mapping, start a new thread
+                    thread_openai_id = await start_thread_openai_session_id(session_id)
+
+                    # Update the user_thread_mapping with the new thread_openai_id
+                    user_thread_mapping_session_id[session_id] = thread_openai_id
+
+                await send_message_user_async(thread_openai_id, question_name)
+                ai_response = await retrieve_ai_response_async(thread_openai_id)
+                if ai_response:
+                    await send_agent_message_crisp(ai_response, session_id)
+
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        await send_agent_message_crisp("Щось пішло не так. Спробуйте пізніше.")
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
