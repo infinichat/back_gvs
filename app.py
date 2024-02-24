@@ -325,6 +325,7 @@ async def message_send_event(message):
         await handle_user_conversation_state_3(user_id, question_answered, user_conversation_state, question_value, session_id)
     else: 
         await handle_user_conversation_result(message, session_id)
+
 @socket_io.on('disconnect')
 def handle_disconnect():
     sid = request.sid
@@ -388,7 +389,8 @@ async def message_received_event(message):
 
                 message_data[fingerprint] = message['content']
                 socket_io.emit('start', {'user_id': user_id, 'message': message['content']}, room=user_id)
-
+    else:
+         print("Didn't go into this condition")
 
 async def message_updated_event(message):
     global cursor, conn
@@ -464,7 +466,8 @@ async def message_updated_event(message):
             socket_io.emit('start', {'user_id': user_id, 'message': new_message}, room=user_id)
         else:
                 print(f"No message found for fingerprint: {fingerprint}")
-
+    else:
+         print("Didn't go into this condition")
 
 async def message_removed_event(message):
         global cursor, conn
@@ -525,7 +528,9 @@ async def message_removed_event(message):
                         print(f"Message to delete: {del_message}")
             else:
                         print(f"No message found for fingerprint: {fingerprint}")
-   
+        else:
+             print("Didn't go into this condition")
+
 async def on_disconnect():
     print("RTM API disconnected")
 
@@ -1152,7 +1157,7 @@ async def handle_user_conversation_result(question, session_id):
 
     except Exception as e:
         print(f"Error: {str(e)}")
-        await send_agent_message_crisp("Щось пішло не так. Спробуйте пізніше.")
+        await send_agent_message_crisp("Щось пішло не так. Спробуйте пізніше.", session_id)
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
