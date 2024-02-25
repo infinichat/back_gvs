@@ -951,10 +951,10 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
     global cursor, conn
     if session_id in agent_flag_mapping and agent_flag_mapping[session_id] is True:
         print("Agent flag for the current user is: " + str(agent_flag_mapping[session_id]))
+        await send_agent_message_crisp("Ваш чат передано менеджеру.", session_id)
         return 
     else: 
         print("The flag is not available to a current user")
-        send_agent_message_crisp("Ваш чат передано менеджеру.", session_id)
 
         print("Question answered in execute_flow " + str(question_answered))
         print("User conversation state " + str(user_conversation_state))
@@ -1125,10 +1125,10 @@ async def handle_user_conversation_state_3(user_id, question_answered, user_conv
     print("Mapped session_id to user_id")
     if session_id in agent_flag_mapping and agent_flag_mapping[session_id] is True:
         print("Agent flag for the current user is: " + str(agent_flag_mapping[session_id]))
+        await send_agent_message_crisp("Ваш чат передано менеджеру.", session_id)
         return 
     else: 
         print("The flag is not available to a current user")
-        send_agent_message_crisp("Ваш чат передано менеджеру.", session_id)
         try:
             if question_answered == 'True' and user_conversation_state == '3':
                 await send_agent_message_crisp("Ваш запит в обробці. Це може зайняти до 1 хвилини", session_id)
@@ -1163,9 +1163,9 @@ async def handle_user_conversation_result(question, session_id):
     print(question)
     if session_id in agent_flag_mapping and agent_flag_mapping[session_id] is True:
         print("Agent flag for the current user is: " + str(agent_flag_mapping[session_id]))
+        await send_agent_message_crisp("Ваш чат передано менеджеру.", session_id)
     else: 
         print("The flag is not available to a current user")
-        send_agent_message_crisp("Ваш чат передано менеджеру.", session_id)
     try:
             await send_agent_message_crisp("Ваш запит в обробці. Це може зайняти до 1 хвилини", session_id)
             cached_response = await query_with_caching(question)
