@@ -296,11 +296,19 @@ async def authenticated(data):
 async def unauthorized(data):
     print(data)
 
+ 
+# @socket_io.on('send_msgs')
+#     async def send_messages(data):
+     
 async def message_send_event(message):
     global cursor, conn
     print('Got a message from user:', message['content'], message['session_id'], message['fingerprint'])
     
-   
+    # @socket_io.on('send_msgs')
+    # async def send_messages(data):
+    # await receive_msg_from_client(message)
+    
+    # await send_messages()
     # question_value = message['content']
     # session_id = message['session_id']
     
@@ -561,9 +569,6 @@ async def connect_to_socket():
     sio.on('reconnect', on_reconnect)
     sio.on('error', on_error)
 
-    @socket_io.on('send_msgs')
-    async def send_messages(data):
-        await receive_msg_from_client(data)
     print(endpoint_url)
     
     await sio.connect(endpoint_url, transports='websocket')
@@ -701,9 +706,11 @@ async def receive_msg_from_client(data):
         await handle_user_conversation_result(question_value, session_id)
 
 
-# @socket_io.on('send_msgs')
-# async def send_messages(data):
-#     await receive_msg_from_client(data)
+@socket_io.on('send_msgs')
+def send_messages(data):
+    asyncio.run(receive_msg_from_client(data))
+    # socket_io.start_background_task(receive_msg_from_client(data))
+    # await receive_msg_from_client(data)
     # socket_io.start_background_task(start_main_tasks_2(data))
 
     # if session_id:
