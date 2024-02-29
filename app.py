@@ -309,14 +309,18 @@ async def message_send_event(message):
     # await receive_msg_from_client(message)
     
     # await send_messages()
-    # question_value = message['content']
-    # session_id = message['session_id']
+    question_value = message['content']
+    session_id = message['session_id']
+    user_id, user_conv_state, question_answered = receive_msg_from_client(message)
+    print("User_ID is: " + user_id)
+    print("User_Conv is: " + user_conv_state)
+    print('QA is: '+question_answered) 
     
-    # if user_id and session_id and question_answered and user_conversation_state:
-    #     await execute_flow_async(question_value, user_id, session_id, question_answered, user_conversation_state)
-    #     await handle_user_conversation_state_3(user_id, question_answered, user_conversation_state, question_value, session_id)
-    # else: 
-    #     await handle_user_conversation_result(question_value, session_id)
+    if user_id and session_id and question_answered and user_conv_state:
+        await execute_flow_async(question_value, user_id, session_id, question_answered, user_conv_state)
+        await handle_user_conversation_state_3(user_id, question_answered, user_conv_state, question_value, session_id)
+    else: 
+        await handle_user_conversation_result(question_value, session_id)
 
 @socket_io.on('disconnect')
 def handle_disconnect():
@@ -691,7 +695,8 @@ async def send_agent_message_crisp(response, session_id):
                 print(await response.text())
 
 
-async def receive_msg_from_client(data):
+     
+def receive_msg_from_client(data):
     question_value = data.get('question', 'Question not found')
     session_id = data.get('session_id')
     user_id = data.get('user_id')
@@ -699,16 +704,12 @@ async def receive_msg_from_client(data):
     question_answered = data.get('question_answered')
     print('Got message from client' + str(question_value) + str(session_id) + str(user_conv_state) + str(question_answered))
 
-    if user_id and session_id and question_answered and user_conv_state:
-        await execute_flow_async(question_value, user_id, session_id, question_answered, user_conv_state)
-        await handle_user_conversation_state_3(user_id, question_answered, user_conv_state, question_value, session_id)
-    else: 
-        await handle_user_conversation_result(question_value, session_id)
+    return user_id, user_conv_state, question_answered
 
 
 @socket_io.on('send_msgs')
 def send_messages(data):
-    asyncio.run(receive_msg_from_client(data))
+    receive_msg_from_client(data)
     # socket_io.start_background_task(receive_msg_from_client(data))
     # await receive_msg_from_client(data)
     # socket_io.start_background_task(start_main_tasks_2(data))
