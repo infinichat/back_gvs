@@ -698,9 +698,8 @@ async def receive_msg_from_client(data):
 
 @socket_io.on('send_msgs')
 def start_main_tasks_2(data):
-    asyncio.run(receive_msg_from_client(data))
-
-# socket_io.start_background_task(start_main_tasks_2)
+    # asyncio.run(receive_msg_from_client(data))
+    socket_io.start_background_task(start_main_tasks_2(data))
 
     # if session_id:
     #     send_user_message_crisp(question_value, session_id)
