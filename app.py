@@ -18,7 +18,7 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 socket_io = SocketIO(app, cors_allowed_origins='*', ping_timeout = 5, ping_interval = 10)
 
 load_dotenv()
-
+#push
 db_config = {
     'host': os.getenv('PGHOST'),
     'database': os.getenv('PGDATABASE'),
