@@ -347,25 +347,28 @@ async def message_received_event(message):
     fingerprint = message['fingerprint']
 
         # Check if the client is in the set of disconnected clients
-    select_query = sql.SQL("SELECT user_id, session_id, question_answered, user_conversation_state FROM users_tab WHERE session_id = {}").format(
-            sql.Literal(session_id)
-    )
-    try: 
-            cursor.execute(select_query)
-    except psycopg2.Error as exc:
-            print(str(exc))
-            cursor.close()
-            conn.close()
+    #select_query = sql.SQL("SELECT user_id, session_id, question_answered, user_conversation_state FROM users_tab WHERE session_id = {}").format(
+            #sql.Literal(session_id)
+    #)
+    #try: 
+            #cursor.execute(select_query)
+    #except psycopg2.Error as exc:
+            #print(str(exc))
+            #cursor.close()
+            #conn.close()
 
-            conn = psycopg2.connect(**db_config_2)
-            cursor = conn.cursor()
+            #conn = psycopg2.connect(**db_config_2)
+            #cursor = conn.cursor()
 
-            cursor.execute(select_query)
-    result = cursor.fetchone()
-    print(result)
+            #cursor.execute(select_query)
+    #result = cursor.fetchone()
+    #print(result)
+    user_id, user_conv_state, question_answered = receive_msg_from_client(message)
+    print("User ID is: " + user_id)
+    print("User_Conv is: " + user_conv_state)
+    print("QA is: "+ question_answered)
 
-    if result:
-                user_id, session_id, question_answered, user_conversation_state = result
+    if user_id and session_id and question_answered and user_conv_state:
 
                 # Check if user_id is not in user_sid_mapping
                 if user_id not in user_sid_mapping or not user_sid_mapping[user_id]:
