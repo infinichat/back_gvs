@@ -398,29 +398,33 @@ async def message_updated_event(message):
     new_message = message['content']
     session_id = message['session_id']
     if fingerprint in message_data:
-        select_query = sql.SQL("SELECT user_id, session_id, question_answered, user_conversation_state FROM users_tab WHERE session_id = {}").format(
-                sql.Literal(session_id)
-            )
+        #select_query = sql.SQL("SELECT user_id, session_id, question_answered, user_conversation_state FROM users_tab WHERE session_id = {}").format(
+                #sql.Literal(session_id)
+            #)
 
-        try:
-            cursor.execute(select_query)
+        #try:
+            #cursor.execute(select_query)
         
-        except psycopg2.Error as exc:
-                print(str(exc))
-                cursor.close()
-                conn.close()
+        #except psycopg2.Error as exc:
+                #print(str(exc))
+                #cursor.close()
+                #conn.close()
 
-                conn = psycopg2.connect(**db_config_2)
-                cursor = conn.cursor()
+                #conn = psycopg2.connect(**db_config_2)
+                #cursor = conn.cursor()
 
-                cursor.execute(select_query)
+                #cursor.execute(select_query)
 
-        result = cursor.fetchone()
-        print(result)
-
-        if result:
-                user_id, session_id, question_answered, user_conversation_state = result  
-        if user_id not in user_sid_mapping or not user_sid_mapping[user_id]:
+        #result = cursor.fetchone()
+        #print(result)
+        user_id, user_conv_state, question_answered = receive_msg_from_client(message)
+        print("User ID is: " + user_id)
+        print("User Conv is: " + user_conv_state)
+        print("QA is: " + question_answered)
+        if user_id and user_conv_state and question_answered and session_id:
+        #if result:
+                #user_id, session_id, question_answered, user_conversation_state = result  
+            if user_id not in user_sid_mapping or not user_sid_mapping[user_id]:
                     print(f"User {user_id} is not connected. The edited message won't be emited.")
                     old_message = message_data[fingerprint]
                     # Update the message content in the dictionary
@@ -447,24 +451,25 @@ async def message_updated_event(message):
                     conn.commit()
                     return
     
-    if fingerprint in message_data:
-        select_query = sql.SQL("SELECT user_id, session_id, question_answered, user_conversation_state FROM users_tab WHERE session_id = {}").format(
-            sql.Literal(session_id)
-        )
+    #if fingerprint in message_data:
+        #select_query = sql.SQL("SELECT user_id, session_id, question_answered, user_conversation_state FROM users_tab WHERE session_id = {}").format(
+            #sql.Literal(session_id)
+        #)
 
-        cursor.execute(select_query)
-        result = cursor.fetchone()
-        print(result)
+        #cursor.execute(select_query)
+        #result = cursor.fetchone()
+        #print(result)
 
-        if result:
-            user_id, session_id, question_answered, user_conversation_state = result  
+        #if result:
+        else:
+            #user_id, session_id, question_answered, user_conversation_state = result  
             old_message = message_data[fingerprint]
             message_data[fingerprint] = new_message
             socket_io.emit('delete_message', {'user_id': user_id, 'message': old_message}, room=user_id)
             print(f"Message edited. Old message: {old_message}, New message: {new_message}")
             socket_io.emit('start', {'user_id': user_id, 'message': new_message}, room=user_id)
-        else:
-                print(f"No message found for fingerprint: {fingerprint}")
+        #else:
+                #print(f"No message found for fingerprint: {fingerprint}")
     else:
          print("Didn't go into this condition")
 
@@ -473,27 +478,31 @@ async def message_removed_event(message):
         session_id = message['session_id']
         fingerprint = message['fingerprint']
 
-        select_query = sql.SQL("SELECT user_id, session_id, question_answered, user_conversation_state FROM users_tab WHERE session_id = {}").format(
-            sql.Literal(session_id)
-        )
-        try: 
-            cursor.execute(select_query)
+        #select_query = sql.SQL("SELECT user_id, session_id, question_answered, user_conversation_state FROM users_tab WHERE session_id = {}").format(
+            #sql.Literal(session_id)
+        #)
+        #try: 
+            #cursor.execute(select_query)
         
-        except psycopg2.Error as exc:
-                print(str(exc))
-                cursor.close()
-                conn.close()
+        #except psycopg2.Error as exc:
+                #print(str(exc))
+                #cursor.close()
+                #conn.close()
 
-                conn = psycopg2.connect(**db_config_2)
-                cursor = conn.cursor()
+                #conn = psycopg2.connect(**db_config_2)
+                #cursor = conn.cursor()
 
-                cursor.execute(select_query)
+                #cursor.execute(select_query)
 
-        result = cursor.fetchone()
-        print(result)
-
-        if result:
-            user_id, session_id, question_answered, user_conversation_state = result
+        #result = cursor.fetchone()
+        #print(result)
+        user_id, user_conv_state, question_answered = receive_msg_from_client(message)
+        print("User_ID is: " + user_id)
+        print ("User Conv is: " + user conv state)
+        print('QA is: '+question_answered)
+        if user_id and session_id and question_answered and user_conv_state:
+        #if result:
+            #user_id, session_id, question_answered, user_conversation_state = result
 
             if fingerprint in message_data:
                         if user_id not in user_sid_mapping or not user_sid_mapping[user_id]:
