@@ -1,3 +1,4 @@
+
 import asyncio
 import os
 import aiohttp
@@ -16,6 +17,9 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 #  message_queue='redis://'
 socket_io = SocketIO(app, cors_allowed_origins='*', ping_timeout = 5, ping_interval = 10)
+
+import tracemalloc
+tracemalloc.start()
 
 load_dotenv()
 #push
@@ -36,44 +40,16 @@ db_config_2 = {
 website_id = os.getenv('website_id')
 username = os.getenv('crisp_identifier')
 password = os.getenv('crisp_key')
-token = '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'
+token = os.getenv('token')
 
-user_thread_mapping = {}
+
 user_thread_mapping_session_id = {}
 import aiohttp
 
-async def start_thread_openai(user_id):
-    global thread_openai_id  # Note: Global variables in async functions should be avoided if possible
-    api_url = "https://api.openai.com/v1/threads"
-    headers = {
-        "OpenAI-Beta": "assistants=v1",
-        "User-Agent": "PostmanRuntime/7.34.0",
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {token}"
-    }
-
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(api_url, headers=headers, json={}) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    thread_openai_id = data.get("id")
-                    print("Thread started successfully! Thread id:", thread_openai_id)
-                    return thread_openai_id
-                elif response.status == 401:  # Unauthorized (Invalid API key)
-                    error_message = (await response.json()).get("error", {}).get("message", "")
-                    if "Incorrect API key provided" in error_message:
-                        print("Error starting OpenAI thread: Incorrect API key provided")
-                        socket_io.emit('start', {'user_id': user_id, 'message': "Технічні неполадки. Відповімо скоро"})
-                    else:
-                        print("Error starting OpenAI thread:", response.status, error_message)
-                    return None
-    except aiohttp.ClientError as err:
-        print(f"HTTP Error: {err}")
-        return None
 
 async def start_thread_openai_session_id(session_id):
-    global thread_openai_id  # Note: Global variables in async functions should be avoided if possible
+    global thread_openai_id
+    #global thread_openai_id  # Note: Global variables in async functions should be avoided if possible
     api_url = "https://api.openai.com/v1/threads"
     headers = {
         "OpenAI-Beta": "assistants=v1",
@@ -223,37 +199,10 @@ def handle_connection_async(user_id_received, question_answered_received, user_c
     global cursor, conn
     if session_id_crisp == "set" or session_id_crisp is None:
         session_id_crisp = start_conversation_crisp()
-    # thread_openai_id = await start_thread_openai(user_id_received)
-    # user_thread_mapping[user_id_received] = thread_openai_id
     print("Assigned session_id: " +  session_id_crisp)
     print(user_id_received, session_id_crisp)
     question_answered = question_answered_received
     print("Assigned question_answered: " + question_answered)
-    # try:
-    #     insert_query = sql.SQL("INSERT INTO users_tab (user_id, session_id, question_answered, user_conversation_state) VALUES ({}, {}, {}, {})").format(
-    #         # sql.Literal(''),  # Assuming 'question_value' is not used in your function
-    #         sql.Literal(user_id_received),
-    #         sql.Literal(session_id_crisp),
-    #         sql.Literal(question_answered),
-    #         sql.Literal(user_conv_state)
-    #     )
-        
-    #     cursor.execute(insert_query)
-    #     conn.commit()
-    #     print("Data inserted into the PostgreSQL table.")
-    # except psycopg2.Error as exc:
-    #     print(exc)
-    #     cursor.close()
-    #     conn.close()
-
-    #     conn = psycopg2.connect(**db_config_2)
-    #     cursor = conn.cursor()
-
-    #     cursor.execute(insert_query)
-    #     conn.commit()
-    # except Exception as e:
-    #     print("Error inserting data into the PostgreSQL table:", e)
-    #     pass
     print("Assigned user_id: " +  user_id_received)
     socket_io.emit('update_variables', {
         'user_id': user_id_received,
@@ -285,7 +234,7 @@ async def on_connect():
         'session:set_segments'
         ],
         "rooms": [
-            "84ca425b-3cf3-4a00-836c-1212d36eba0c"
+            "c832a31b-be3c-404e-a12f-4a965191e7e9"
         ]
     });
     print("RTM API connected")
@@ -296,31 +245,34 @@ async def authenticated(data):
 async def unauthorized(data):
     print(data)
 
- 
-# @socket_io.on('send_msgs')
-#     async def send_messages(data):
-     
+
 async def message_send_event(message):
     global cursor, conn
+    global user_data_dict
     print('Got a message from user:', message['content'], message['session_id'], message['fingerprint'])
     
-    # @socket_io.on('send_msgs')
-    # async def send_messages(data):
-    # await receive_msg_from_client(message)
-    
-    # await send_messages()
     question_value = message['content']
     session_id = message['session_id']
-    user_id, user_conv_state, question_answered = receive_msg_from_client(message)
-    print("User_ID is: " + user_id)
-    print("User_Conv is: " + user_conv_state)
-    print('QA is: '+question_answered) 
     
-    if user_id and session_id and question_answered and user_conv_state:
-        await execute_flow_async(question_value, user_id, session_id, question_answered, user_conv_state)
-        await handle_user_conversation_state_3(user_id, question_answered, user_conv_state, question_value, session_id)
-    else: 
+    if session_id in user_data_dict:
+        # Access user-specific data
+        user_id = user_data_dict[session_id]['user_id']
+        user_conv_state = user_data_dict[session_id]['user_conv_state']
+        question_answered = user_data_dict[session_id]['question_answered']
+
+        print(f"User_ID for session {session_id} is: {user_id}")
+        print(f"User_Conv for session {session_id} is: {user_conv_state}")
+        print(f'QA for session {session_id} is: {question_answered}')
+        
+        if user_id and session_id and question_answered and user_conv_state:
+            await execute_flow_async(question_value, user_id, session_id, question_answered, user_conv_state)
+            await handle_user_conversation_state_3(user_id, question_answered, user_conv_state, question_value, session_id)
+        else:
+            print(f"Missing information for session {session_id}. Some values are None.")
+    else:
+        print(f"Session {session_id} not found in user_data_dict!")
         await handle_user_conversation_result(question_value, session_id)
+
 
 @socket_io.on('disconnect')
 def handle_disconnect():
@@ -342,54 +294,45 @@ def handle_disconnect():
 
 async def message_received_event(message):
     global cursor, conn
+    print('Listening to this event')
     print('Got a message from agent: ' + message['content'], message['session_id'], message['fingerprint'])
     session_id = message['session_id']
     fingerprint = message['fingerprint']
 
-        # Check if the client is in the set of disconnected clients
-    #select_query = sql.SQL("SELECT user_id, session_id, question_answered, user_conversation_state FROM users_tab WHERE session_id = {}").format(
-            #sql.Literal(session_id)
-    #)
-    #try: 
-            #cursor.execute(select_query)
-    #except psycopg2.Error as exc:
-            #print(str(exc))
-            #cursor.close()
-            #conn.close()
+    global user_data_dict
 
-            #conn = psycopg2.connect(**db_config_2)
-            #cursor = conn.cursor()
+    if session_id in user_data_dict:
+        # Access user-specific data
+        user_id = user_data_dict[session_id]['user_id']
+        user_conv_state = user_data_dict[session_id]['user_conv_state']
+        question_answered = user_data_dict[session_id]['question_answered']
 
-            #cursor.execute(select_query)
-    #result = cursor.fetchone()
-    #print(result)
-    user_id, user_conv_state, question_answered = receive_msg_from_client(message)
-    print("User ID is: " + user_id)
-    print("User_Conv is: " + user_conv_state)
-    print("QA is: "+ question_answered)
+        print(f"User_ID for session {session_id} is: {user_id}")
+        print(f"User_Conv for session {session_id} is: {user_conv_state}")
+        print(f'QA for session {session_id} is: {question_answered}')
+            
+        if user_id and session_id and question_answered and user_conv_state:
 
-    if user_id and session_id and question_answered and user_conv_state:
+                    # Check if user_id is not in user_sid_mapping
+                    if user_id not in user_sid_mapping or not user_sid_mapping[user_id]:
+                        print(f"User {user_id} is not connected. The message won't be emitted.")
+                        insert_query = sql.SQL("INSERT INTO deactivated_messages(user_id, message_content, fingerprint, session_id) VALUES ({}, {}, {}, {})").format(
+                            sql.Literal(user_id),
+                            sql.Literal(message['content']),
+                            sql.Literal(fingerprint),
+                            sql.Literal(session_id)
+                        )
+                        cursor.execute(insert_query)
+                        # Commit the transaction
+                        conn.commit()
+                        message_data[fingerprint] = message['content']
 
-                # Check if user_id is not in user_sid_mapping
-                if user_id not in user_sid_mapping or not user_sid_mapping[user_id]:
-                    print(f"User {user_id} is not connected. The message won't be emitted.")
-                    insert_query = sql.SQL("INSERT INTO deactivated_messages(user_id, message_content, fingerprint, session_id) VALUES ({}, {}, {}, {})").format(
-                        sql.Literal(user_id),
-                        sql.Literal(message['content']),
-                        sql.Literal(fingerprint),
-                        sql.Literal(session_id)
-                    )
-                    cursor.execute(insert_query)
-                    # Commit the transaction
-                    conn.commit()
+                        return
+
                     message_data[fingerprint] = message['content']
-
-                    return
-
-                message_data[fingerprint] = message['content']
-                socket_io.emit('start', {'user_id': user_id, 'message': message['content']}, room=user_id)
-    else:
-         print("Didn't go into this condition")
+                    socket_io.emit('start', {'user_id': user_id, 'message': message['content']}, room=user_id)
+        else:
+            print("Didn't go into this condition")
 
 async def message_updated_event(message):
     global cursor, conn
@@ -398,146 +341,110 @@ async def message_updated_event(message):
     new_message = message['content']
     session_id = message['session_id']
     if fingerprint in message_data:
-        #select_query = sql.SQL("SELECT user_id, session_id, question_answered, user_conversation_state FROM users_tab WHERE session_id = {}").format(
-                #sql.Literal(session_id)
-            #)
+        global user_data_dict
 
-        #try:
-            #cursor.execute(select_query)
-        
-        #except psycopg2.Error as exc:
-                #print(str(exc))
-                #cursor.close()
-                #conn.close()
+        if session_id in user_data_dict:
+                    # Access user-specific data
+                    user_id = user_data_dict[session_id]['user_id']
+                    user_conv_state = user_data_dict[session_id]['user_conv_state']
+                    question_answered = user_data_dict[session_id]['question_answered']
 
-                #conn = psycopg2.connect(**db_config_2)
-                #cursor = conn.cursor()
+                    print(f"User_ID for session {session_id} is: {user_id}")
+                    print(f"User_Conv for session {session_id} is: {user_conv_state}")
+                    print(f'QA for session {session_id} is: {question_answered}')
+                    if user_id and user_conv_state and question_answered and session_id:
+                    #if result:
+                            #user_id, session_id, question_answered, user_conversation_state = result  
+                        if user_id not in user_sid_mapping or not user_sid_mapping[user_id]:
+                                print(f"User {user_id} is not connected. The edited message won't be emited.")
+                                old_message = message_data[fingerprint]
+                                # Update the message content in the dictionary
+                                message_data[fingerprint] = new_message
 
-                #cursor.execute(select_query)
+                                print(old_message)
+                                print(new_message)
 
-        #result = cursor.fetchone()
-        #print(result)
-        user_id, user_conv_state, question_answered = receive_msg_from_client(message)
-        print("User ID is: " + user_id)
-        print("User Conv is: " + user_conv_state)
-        print("QA is: " + question_answered)
-        if user_id and user_conv_state and question_answered and session_id:
-        #if result:
-                #user_id, session_id, question_answered, user_conversation_state = result  
-            if user_id not in user_sid_mapping or not user_sid_mapping[user_id]:
-                    print(f"User {user_id} is not connected. The edited message won't be emited.")
-                    old_message = message_data[fingerprint]
-                    # Update the message content in the dictionary
-                    message_data[fingerprint] = new_message
-
-                    print(old_message)
-                    print(new_message)
-
-                    # Update the message content in the database table
-                    update_query = sql.SQL("UPDATE deactivated_messages SET message_content = {} WHERE user_id = {} AND message_content = {}").format(
-                        sql.Literal(new_message),
-                        sql.Literal(user_id),
-                        sql.Literal(old_message)
-                        # sql.Literal(str(fingerprint))
-                    )
-                    cursor.execute(update_query)
-                    if cursor.rowcount > 0:
-                        print(f"{cursor.rowcount} row(s) deleted.")
+                                # Update the message content in the database table
+                                update_query = sql.SQL("UPDATE deactivated_messages SET message_content = {} WHERE user_id = {} AND message_content = {}").format(
+                                    sql.Literal(new_message),
+                                    sql.Literal(user_id),
+                                    sql.Literal(old_message)
+                                    # sql.Literal(str(fingerprint))
+                                )
+                                cursor.execute(update_query)
+                                if cursor.rowcount > 0:
+                                    print(f"{cursor.rowcount} row(s) deleted.")
+                                else:
+                                    print("No rows deleted.")
+                                    del_messages_map[user_id] = old_message
+                                    edit_messages_map[user_id] = new_message
+                                # Commit the transaction
+                                conn.commit()
+                                return
+                        else:
+                            #user_id, session_id, question_answered, user_conversation_state = result  
+                            old_message = message_data[fingerprint]
+                            message_data[fingerprint] = new_message
+                            socket_io.emit('delete_message', {'user_id': user_id, 'message': old_message}, room=user_id)
+                            print(f"Message edited. Old message: {old_message}, New message: {new_message}")
+                            socket_io.emit('start', {'user_id': user_id, 'message': new_message}, room=user_id)
                     else:
-                        print("No rows deleted.")
-                        del_messages_map[user_id] = old_message
-                        edit_messages_map[user_id] = new_message
-                    # Commit the transaction
-                    conn.commit()
-                    return
-    
-    #if fingerprint in message_data:
-        #select_query = sql.SQL("SELECT user_id, session_id, question_answered, user_conversation_state FROM users_tab WHERE session_id = {}").format(
-            #sql.Literal(session_id)
-        #)
-
-        #cursor.execute(select_query)
-        #result = cursor.fetchone()
-        #print(result)
-
-        #if result:
+                            print(f"No message found for fingerprint: {fingerprint}")
         else:
-            #user_id, session_id, question_answered, user_conversation_state = result  
-            old_message = message_data[fingerprint]
-            message_data[fingerprint] = new_message
-            socket_io.emit('delete_message', {'user_id': user_id, 'message': old_message}, room=user_id)
-            print(f"Message edited. Old message: {old_message}, New message: {new_message}")
-            socket_io.emit('start', {'user_id': user_id, 'message': new_message}, room=user_id)
-        #else:
-                #print(f"No message found for fingerprint: {fingerprint}")
-    else:
-         print("Didn't go into this condition")
+            print("Didn't go into this condition")
 
 async def message_removed_event(message):
         global cursor, conn
         session_id = message['session_id']
         fingerprint = message['fingerprint']
+        global user_data_dict
 
-        #select_query = sql.SQL("SELECT user_id, session_id, question_answered, user_conversation_state FROM users_tab WHERE session_id = {}").format(
-            #sql.Literal(session_id)
-        #)
-        #try: 
-            #cursor.execute(select_query)
-        
-        #except psycopg2.Error as exc:
-                #print(str(exc))
-                #cursor.close()
-                #conn.close()
+        if session_id in user_data_dict:
+                # Access user-specific data
+                user_id = user_data_dict[session_id]['user_id']
+                user_conv_state = user_data_dict[session_id]['user_conv_state']
+                question_answered = user_data_dict[session_id]['question_answered']
 
-                #conn = psycopg2.connect(**db_config_2)
-                #cursor = conn.cursor()
+                print(f"User_ID for session {session_id} is: {user_id}")
+                print(f"User_Conv for session {session_id} is: {user_conv_state}")
+                print(f'QA for session {session_id} is: {question_answered}')
+                
+                if user_id and session_id and question_answered and user_conv_state:
+                    if fingerprint in message_data:
+                                if user_id not in user_sid_mapping or not user_sid_mapping[user_id]:
+                                        print(f"User {user_id} is not connected. The deleted message won't be emited.")
+                                        del_message = message_data[fingerprint]
 
-                #cursor.execute(select_query)
+                                        # Update the message content in the database table
+                                        delete_query = sql.SQL("DELETE FROM deactivated_messages WHERE user_id = {} AND fingerprint = {} AND message_content = {}").format(
+                                            sql.Literal(user_id),
+                                            sql.Literal(str(fingerprint)),
+                                            sql.Literal(del_message)
+                                        )
+                                        cursor.execute(delete_query)
 
-        #result = cursor.fetchone()
-        #print(result)
-        user_id, user_conv_state, question_answered = receive_msg_from_client(message)
-        print("User_ID is: " + user_id)
-        print ("User Conv is: " + user conv state)
-        print('QA is: '+question_answered)
-        if user_id and session_id and question_answered and user_conv_state:
-        #if result:
-            #user_id, session_id, question_answered, user_conversation_state = result
-
-            if fingerprint in message_data:
-                        if user_id not in user_sid_mapping or not user_sid_mapping[user_id]:
-                                print(f"User {user_id} is not connected. The deleted message won't be emited.")
+                                        if cursor.rowcount > 0:
+                                            print(f"{cursor.rowcount} row(s) deleted.")
+                                        else:
+                                            print("No rows deleted.")
+                                            del_messages_map[user_id] = del_message
+                                        # Commit the transaction
+                                        conn.commit()
+                                        return
+                                
                                 del_message = message_data[fingerprint]
 
-                                # Update the message content in the database table
-                                delete_query = sql.SQL("DELETE FROM deactivated_messages WHERE user_id = {} AND fingerprint = {} AND message_content = {}").format(
-                                    sql.Literal(user_id),
-                                    sql.Literal(str(fingerprint)),
-                                    sql.Literal(del_message)
-                                )
-                                cursor.execute(delete_query)
+                                print("User id to submit delete message: " + user_id)
+                                socket_io.emit('user_id', {'response': user_id})
+                                socket_io.emit('delete_message', {'user_id': user_id, 'message': del_message}, room=user_id)
 
-                                if cursor.rowcount > 0:
-                                    print(f"{cursor.rowcount} row(s) deleted.")
-                                else:
-                                    print("No rows deleted.")
-                                    del_messages_map[user_id] = del_message
-                                # Commit the transaction
-                                conn.commit()
-                                return
-                        
-                        del_message = message_data[fingerprint]
+                                del message_data[fingerprint]
+                                print(f"Message to delete: {del_message}")
+                    else:
+                                print(f"No message found for fingerprint: {fingerprint}")
+                else:
+                    print("Didn't go into this condition")
 
-                        print("User id to submit delete message: " + user_id)
-                        socket_io.emit('user_id', {'response': user_id})
-                        socket_io.emit('delete_message', {'user_id': user_id, 'message': del_message}, room=user_id)
-
-                        del message_data[fingerprint]
-                        print(f"Message to delete: {del_message}")
-            else:
-                        print(f"No message found for fingerprint: {fingerprint}")
-        else:
-             print("Didn't go into this condition")
 agent_flag_mapping = {}
 
 async def message_set_segments(session):
@@ -552,7 +459,8 @@ async def message_set_segments(session):
             print(agent_flag_mapping[session_id])
      except  Exception as e:
         print("An error occured" + str({e}))
-        pass
+        if session_id in agent_flag_mapping:
+            del agent_flag_mapping[session_id]
 
 async def on_disconnect():
     print("RTM API disconnected")
@@ -608,6 +516,7 @@ async def main():
         finally:
             await client.disconnect()
 
+
 def start_main_tasks():
     asyncio.run(main())
 
@@ -644,34 +553,38 @@ def start_conversation_crisp():
         print(response.text)
 
 
-def send_user_message_crisp(question, session_id):
-    api_url = f"https://api.crisp.chat/v1/website/{website_id}/conversation/{session_id}/message"
-    basic_auth_credentials=(username, password)
-    headers = {
-        'Content-Type': 'application/json',
-        'User-Agent': 'PostmanRuntime/7.35.0',
-        'X-Crisp-Tier': 'plugin'
-    }
-    payload = {
-        "type": "text",
-        "from": "user",
-        "origin": "chat",
-        "content": question
-    }
-    response = requests.post(
-        api_url,
-        headers=headers,
-        auth=HTTPBasicAuth(*basic_auth_credentials),
-        json=payload
-    )
-
-    if response.status_code == 202:
-        print(response.json())
-    else:
-        print(f"Request failed with status code {response.status_code}.")
-        print(response.text)
 
 import aiohttp
+
+
+# async def send_user_message_crisp(question, session_id):
+#     api_url = f"https://api.crisp.chat/v1/website/{website_id}/conversation/{session_id}/message"
+#     basic_auth_credentials = aiohttp.BasicAuth(username, password)
+#     headers = {
+#         'Content-Type': 'application/json',
+#         'User-Agent': 'PostmanRuntime/7.35.0',
+#         'X-Crisp-Tier': 'plugin'
+#     }
+#     payload = {
+#         "type": "text",
+#         "from": "user",
+#         "origin": "chat",
+#         "content": question
+#     }
+
+#     async with aiohttp.ClientSession() as session:
+#         async with session.post(
+#             api_url,
+#             headers=headers,
+#             auth=basic_auth_credentials,
+#             json=payload
+#         ) as response:
+
+#             if response.status == 202:
+#                 print(await response.json())
+#             else:
+#                 print(f"Request failed with status code {response.status}.")
+#                 print(await response.text())
 
 async def send_agent_message_crisp(response, session_id):
     global global_fingerprint
@@ -706,28 +619,94 @@ async def send_agent_message_crisp(response, session_id):
                 print(f"Request failed with status code {response.status}.")
                 print(await response.text())
 
-
+user_data_dict = {}
      
-def receive_msg_from_client(data):
-    question_value = data.get('question', 'Question not found')
-    session_id = data.get('session_id')
-    user_id = data.get('user_id')
-    user_conv_state = data.get('user_conversation_state')
-    question_answered = data.get('question_answered')
-    print('Got message from client' + str(question_value) + str(session_id) + str(user_conv_state) + str(question_answered))
 
-    return user_id, user_conv_state, question_answered
+# def send_messages(data):
+#     print(str(data))
+#     global user_assign_data
+#     user_id = data.get('user_id')
+#     user_conv_state = data.get('user_conversation_state')
+#     question_answered = data.get('question_answered')
+#     question = data.get('question')
+#     session_id = data.get('session_id')
+#     print(user_id, user_conv_state, question_answered)
+    
+#     send_user_message_crisp(question, session_id)
 
+#     # Create or update user data in the dictionary
+#     user_data_dict[session_id] = {
+#         'user_id': data.get('user_id'),
+#         'user_conv_state': data.get('user_conversation_state'),
+#         'question_answered': data.get('question_answered')
+#     }
+
+    # Use emit to send a message back to the client
+    # await socket_io.emit('response', {'data': 'Your response message'}, room=session_id)
+
+# def start_main_messages(data):
+#     asyncio.run(send_messages(data))
+
+
+tasks = []
+
+
+def send_user_message_crisp(user_id, question, session_id):
+    api_url = f"https://api.crisp.chat/v1/website/{website_id}/conversation/{session_id}/message"
+    basic_auth_credentials=(username, password)
+    headers = {
+        'Content-Type': 'application/json',
+        'User-Agent': 'PostmanRuntime/7.35.0',
+        'X-Crisp-Tier': 'plugin'
+    }
+    payload = {
+        "type": "text",
+        "from": "user",
+        "origin": "chat",
+        "content": question
+    }
+    response = requests.post(
+        api_url,
+        headers=headers,
+        auth=HTTPBasicAuth(*basic_auth_credentials),
+        json=payload
+    )
+
+    if response.status_code == 202:
+        print(response.json())
+    else:
+        print(f"Request failed with status code {response.status_code}.")
+        socket_io.emit('update_session', {'session_crisp': 'not found'}, room=user_id)
+        socket_io.emit('start', {'user_id': user_id, 'message': 'Відбувся збій. Будь ласка, оновіть сторінку.'}, room=user_id)
+        print('Emitted to update session')
+        print(response.text)
 
 @socket_io.on('send_msgs')
 def send_messages(data):
-    receive_msg_from_client(data)
-    # socket_io.start_background_task(receive_msg_from_client(data))
-    # await receive_msg_from_client(data)
-    # socket_io.start_background_task(start_main_tasks_2(data))
+    print(str(data))
+    global user_assign_data
+    user_id = data.get('user_id')
+    user_conv_state = data.get('user_conversation_state')
+    question_answered = data.get('question_answered')
+    question = data.get('question')
+    session_id = data.get('session_id')
+    print(user_id, user_conv_state, question_answered)
+    
+    send_user_message_crisp(user_id, question, session_id)
 
-    # if session_id:
-    #     send_user_message_crisp(question_value, session_id)
+    # Create or update user data in the dictionary
+    user_data_dict[session_id] = {
+        'user_id': data.get('user_id'),
+        'user_conv_state': data.get('user_conversation_state'),
+        'question_answered': data.get('question_answered')
+    }
+# def print_dontknow(data):
+#     # loop = asyncio.get_event_loop()
+#     # # loop.create_task(send_messages(data))
+#     # tasks.append(loop.create_task(send_messages(data)))
+#     print('MESSAGE IS SENT!!!!')
+# async def handle_msgs_func(data):
+#     await send_messages(data)
 
 
 async def send_message_user_async(thread_openai_id, question):
@@ -974,6 +953,7 @@ user_first_messages_mapping = {}
 
 async def execute_flow_async(message, user_id, session_id, question_answered, user_conversation_state):
     global cursor, conn
+    global thread_openai_id
     if session_id in agent_flag_mapping and agent_flag_mapping[session_id] is True:
         print("Agent flag for the current user is: " + str(agent_flag_mapping[session_id]))
         await send_agent_message_crisp("Ваш чат передано менеджеру.", session_id)
@@ -1016,7 +996,7 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
                     # print("USER FIRST MESSAGE IS: " + user_first_messages)
 
                 if question_answered == 'False' and user_conversation_state == '2':
-                    await send_agent_message_crisp("Ваш запит в обробці. Це може зайняти до 1 хвилини", session_id)
+                    # await send_agent_message_crisp("Ваш запит в обробці. Це може зайняти до 1 хвилини", session_id)
                     print("Emitting the updated variables")
                     if user_id in user_first_messages_mapping:
                             user_first_messages = user_first_messages_mapping[user_id]
@@ -1036,15 +1016,22 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
                                 await send_agent_message_crisp(cached_response, session_id)
                             else:
                                 print('Going into the condition')
-                                await send_agent_message_crisp("Ваш запит в обробці. Це може зайняти до 1 хвилини", session_id)
-                                thread_openai_id = await start_thread_openai(user_id)
-                                user_thread_mapping[user_id] = thread_openai_id
+                                # await send_agent_message_crisp("Ваш запит в обробці. Це може зайняти до 1 хвилини", session_id)
+                                thread_openai_id = user_thread_mapping_session_id.get(session_id)
+
+                                if thread_openai_id is None:
+                                    # Thread ID not found in the mapping, start a new thread
+                                    thread_openai_id = await start_thread_openai_session_id(session_id)
+
+                                    # Update the user_thread_mapping with the new thread_openai_id
+                                    user_thread_mapping_session_id[session_id] = thread_openai_id
                                 print(thread_openai_id)
                                 question_name =  user_content_name + ". " + question
                                 await send_message_user_async(thread_openai_id, question_name)
                                 ai_response = await retrieve_ai_response_async(thread_openai_id)
                                 if ai_response:
-                                    await send_agent_message_crisp(ai_response, session_id)
+                                    cleaned_text = re.sub('【.*?†source】', '', ai_response)
+                                    await send_agent_message_crisp(cleaned_text, session_id)
                             user_conversation_state = 3
                             question_answered = 'True'
                             socket_io.emit('update_variables', {
@@ -1086,18 +1073,19 @@ async def get_conversation_metas(session_id):
         print(f"HTTP Error: {err}")
 
 async def handle_user_conversation_state_3(user_id, question_answered, user_conversation_state, question, session_id):
+    global thread_openai_id
     print(user_id, session_id)
     print(question)
     print("Mapped session_id to user_id")
     if session_id in agent_flag_mapping and agent_flag_mapping[session_id] is True:
         print("Agent flag for the current user is: " + str(agent_flag_mapping[session_id]))
-        await send_agent_message_crisp("Ваш чат передано менеджеру.", session_id)
+        # await send_agent_message_crisp("Ваш чат передано менеджеру.", session_id)
         return 
     else: 
         print("The flag is not available to a current user")
         try:
             if question_answered == 'True' and user_conversation_state == '3':
-                await send_agent_message_crisp("Ваш запит в обробці. Це може зайняти до 1 хвилини", session_id)
+                # await send_agent_message_crisp("Ваш запит в обробці. Це може зайняти до 1 хвилини", session_id)
                 cached_response = await query_with_caching(question)
 
                 if cached_response:
@@ -1106,25 +1094,27 @@ async def handle_user_conversation_state_3(user_id, question_answered, user_conv
                     user_content_name = await get_conversation_metas(session_id)
                     question_name = user_content_name + ". " + question
                     print(question_name)
-                    thread_openai_id = user_thread_mapping.get(user_id)
+                    thread_openai_id = user_thread_mapping_session_id.get(session_id)
 
                     if thread_openai_id is None:
-                        # Thread ID not found in the mapping, start a new thread
-                        thread_openai_id = await start_thread_openai(user_id)
+                    # Thread ID not found in the mapping, start a new thread
+                        thread_openai_id = await start_thread_openai_session_id(session_id)
 
                         # Update the user_thread_mapping with the new thread_openai_id
-                        user_thread_mapping[user_id] = thread_openai_id
+                        user_thread_mapping_session_id[session_id] = thread_openai_id
 
                     await send_message_user_async(thread_openai_id, question_name)
                     ai_response = await retrieve_ai_response_async(thread_openai_id)
                     if ai_response:
-                        await send_agent_message_crisp(ai_response, session_id)
+                        cleaned_text = re.sub('【.*?†source】', '', ai_response)
+                        await send_agent_message_crisp(cleaned_text, session_id)
 
         except Exception as e:
             print(f"Error: {str(e)}")
             socket_io.emit('start', {'user_id': user_id, 'message': 'Щось пішло не так, спробуйте пізніше...'}, room=user_id)
 
 async def handle_user_conversation_result(question, session_id):
+    global thread_openai_id
     print(session_id)
     print(question)
     if session_id in agent_flag_mapping and agent_flag_mapping[session_id] is True:
@@ -1154,13 +1144,15 @@ async def handle_user_conversation_result(question, session_id):
                 await send_message_user_async(thread_openai_id, question_name)
                 ai_response = await retrieve_ai_response_async(thread_openai_id)
                 if ai_response:
-                    await send_agent_message_crisp(ai_response, session_id)
-
+                        cleaned_text = re.sub('【.*?†source】', '', ai_response)
+                        print(cleaned_text)
+                        await send_agent_message_crisp(cleaned_text, session_id)
     except Exception as e:
         print(f"Error: {str(e)}")
         await send_agent_message_crisp("Щось пішло не так. Спробуйте пізніше.", session_id)
 
 if __name__ == "__main__":
+    # loop = asyncio.new_event_loop()
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(socket_io.run(app, port=5000))
+    loop.run_until_complete(socket_io.run(app, port=5000, debug=True))
 
