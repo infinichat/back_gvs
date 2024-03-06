@@ -249,7 +249,7 @@ host_session_map = {}
 host_origin = None 
 async def message_send_event(message):
     global host_origin
-    if host_origin == 'https://infini.getinfinichat.xyz/' in host_session_map:
+    if host_origin in host_session_map and host_session_map[host_origin] == 'https://infini.getinfinichat.xyz/':
         global cursor, conn
         global user_data_dict
         print('Got a message from user:', message['content'], message['session_id'], message['fingerprint'])
@@ -297,7 +297,7 @@ def handle_disconnect():
 
 async def message_received_event(message):
     global host_origin
-    if host_origin == 'https://infini.getinfinichat.xyz/' in host_session_map:
+    if host_origin in host_session_map and host_session_map[host_origin] == 'https://infini.getinfinichat.xyz/':
         global cursor, conn
         print('Listening to this event')
         print('Got a message from agent: ' + message['content'], message['session_id'], message['fingerprint'])
@@ -341,7 +341,7 @@ async def message_received_event(message):
 
 async def message_updated_event(message):
     global host_origin
-    if host_origin == 'https://infini.getinfinichat.xyz/' in host_session_map:
+    if host_origin in host_session_map and host_session_map[host_origin] == 'https://infini.getinfinichat.xyz/':
         global cursor, conn
         print('Got a updated message: ' + message['content'], message['fingerprint']);
         fingerprint = message['fingerprint']
@@ -402,7 +402,7 @@ async def message_updated_event(message):
 
 async def message_removed_event(message):
     global host_origin
-    if host_origin == 'https://infini.getinfinichat.xyz/' in host_session_map:
+    if host_origin in host_session_map and host_session_map[host_origin] == 'https://infini.getinfinichat.xyz/':
         global cursor, conn
         session_id = message['session_id']
         fingerprint = message['fingerprint']
