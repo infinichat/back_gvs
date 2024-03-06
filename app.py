@@ -3,7 +3,7 @@ import asyncio
 import os
 import aiohttp
 import asyncpg
-from flask import Flask, request
+from flask import Flask, jsonify, request
 from flask_socketio import SocketIO, join_room
 import requests
 from dotenv import load_dotenv
@@ -245,33 +245,36 @@ async def authenticated(data):
 async def unauthorized(data):
     print(data)
 
-
+host_session_map = {}
+host_origin = None 
 async def message_send_event(message):
-    global cursor, conn
-    global user_data_dict
-    print('Got a message from user:', message['content'], message['session_id'], message['fingerprint'])
-    
-    question_value = message['content']
-    session_id = message['session_id']
-    
-    if session_id in user_data_dict:
-        # Access user-specific data
-        user_id = user_data_dict[session_id]['user_id']
-        user_conv_state = user_data_dict[session_id]['user_conv_state']
-        question_answered = user_data_dict[session_id]['question_answered']
-
-        print(f"User_ID for session {session_id} is: {user_id}")
-        print(f"User_Conv for session {session_id} is: {user_conv_state}")
-        print(f'QA for session {session_id} is: {question_answered}')
+    global host_origin
+    if host_origin == 'https://infini.getinfinichat.xyz/' in host_session_map:
+        global cursor, conn
+        global user_data_dict
+        print('Got a message from user:', message['content'], message['session_id'], message['fingerprint'])
         
-        if user_id and session_id and question_answered and user_conv_state:
-            await execute_flow_async(question_value, user_id, session_id, question_answered, user_conv_state)
-            await handle_user_conversation_state_3(user_id, question_answered, user_conv_state, question_value, session_id)
+        question_value = message['content']
+        session_id = message['session_id']
+        
+        if session_id in user_data_dict:
+            # Access user-specific data
+            user_id = user_data_dict[session_id]['user_id']
+            user_conv_state = user_data_dict[session_id]['user_conv_state']
+            question_answered = user_data_dict[session_id]['question_answered']
+
+            print(f"User_ID for session {session_id} is: {user_id}")
+            print(f"User_Conv for session {session_id} is: {user_conv_state}")
+            print(f'QA for session {session_id} is: {question_answered}')
+            
+            if user_id and session_id and question_answered and user_conv_state:
+                await execute_flow_async(question_value, user_id, session_id, question_answered, user_conv_state)
+                await handle_user_conversation_state_3(user_id, question_answered, user_conv_state, question_value, session_id)
+            else:
+                print(f"Missing information for session {session_id}. Some values are None.")
         else:
-            print(f"Missing information for session {session_id}. Some values are None.")
-    else:
-        print(f"Session {session_id} not found in user_data_dict!")
-        await handle_user_conversation_result(question_value, session_id)
+            print(f"Session {session_id} not found in user_data_dict!")
+            await handle_user_conversation_result(question_value, session_id)
 
 
 @socket_io.on('disconnect')
@@ -293,107 +296,113 @@ def handle_disconnect():
             break
 
 async def message_received_event(message):
-    global cursor, conn
-    print('Listening to this event')
-    print('Got a message from agent: ' + message['content'], message['session_id'], message['fingerprint'])
-    session_id = message['session_id']
-    fingerprint = message['fingerprint']
+    global host_origin
+    if host_origin == 'https://infini.getinfinichat.xyz/' in host_session_map:
+        global cursor, conn
+        print('Listening to this event')
+        print('Got a message from agent: ' + message['content'], message['session_id'], message['fingerprint'])
+        session_id = message['session_id']
+        fingerprint = message['fingerprint']
 
-    global user_data_dict
-
-    if session_id in user_data_dict:
-        # Access user-specific data
-        user_id = user_data_dict[session_id]['user_id']
-        user_conv_state = user_data_dict[session_id]['user_conv_state']
-        question_answered = user_data_dict[session_id]['question_answered']
-
-        print(f"User_ID for session {session_id} is: {user_id}")
-        print(f"User_Conv for session {session_id} is: {user_conv_state}")
-        print(f'QA for session {session_id} is: {question_answered}')
-            
-        if user_id and session_id and question_answered and user_conv_state:
-
-                    # Check if user_id is not in user_sid_mapping
-                    if user_id not in user_sid_mapping or not user_sid_mapping[user_id]:
-                        print(f"User {user_id} is not connected. The message won't be emitted.")
-                        insert_query = sql.SQL("INSERT INTO deactivated_messages(user_id, message_content, fingerprint, session_id) VALUES ({}, {}, {}, {})").format(
-                            sql.Literal(user_id),
-                            sql.Literal(message['content']),
-                            sql.Literal(fingerprint),
-                            sql.Literal(session_id)
-                        )
-                        cursor.execute(insert_query)
-                        # Commit the transaction
-                        conn.commit()
-                        message_data[fingerprint] = message['content']
-
-                        return
-
-                    message_data[fingerprint] = message['content']
-                    socket_io.emit('start', {'user_id': user_id, 'message': message['content']}, room=user_id)
-        else:
-            print("Didn't go into this condition")
-
-async def message_updated_event(message):
-    global cursor, conn
-    print('Got a updated message: ' + message['content'], message['fingerprint']);
-    fingerprint = message['fingerprint']
-    new_message = message['content']
-    session_id = message['session_id']
-    if fingerprint in message_data:
         global user_data_dict
 
         if session_id in user_data_dict:
-                    # Access user-specific data
-                    user_id = user_data_dict[session_id]['user_id']
-                    user_conv_state = user_data_dict[session_id]['user_conv_state']
-                    question_answered = user_data_dict[session_id]['question_answered']
+            # Access user-specific data
+            user_id = user_data_dict[session_id]['user_id']
+            user_conv_state = user_data_dict[session_id]['user_conv_state']
+            question_answered = user_data_dict[session_id]['question_answered']
 
-                    print(f"User_ID for session {session_id} is: {user_id}")
-                    print(f"User_Conv for session {session_id} is: {user_conv_state}")
-                    print(f'QA for session {session_id} is: {question_answered}')
-                    if user_id and user_conv_state and question_answered and session_id:
-                    #if result:
-                            #user_id, session_id, question_answered, user_conversation_state = result  
+            print(f"User_ID for session {session_id} is: {user_id}")
+            print(f"User_Conv for session {session_id} is: {user_conv_state}")
+            print(f'QA for session {session_id} is: {question_answered}')
+                
+            if user_id and session_id and question_answered and user_conv_state:
+
+                        # Check if user_id is not in user_sid_mapping
                         if user_id not in user_sid_mapping or not user_sid_mapping[user_id]:
-                                print(f"User {user_id} is not connected. The edited message won't be emited.")
+                            print(f"User {user_id} is not connected. The message won't be emitted.")
+                            insert_query = sql.SQL("INSERT INTO deactivated_messages(user_id, message_content, fingerprint, session_id) VALUES ({}, {}, {}, {})").format(
+                                sql.Literal(user_id),
+                                sql.Literal(message['content']),
+                                sql.Literal(fingerprint),
+                                sql.Literal(session_id)
+                            )
+                            cursor.execute(insert_query)
+                            # Commit the transaction
+                            conn.commit()
+                            message_data[fingerprint] = message['content']
+
+                            return
+
+                        message_data[fingerprint] = message['content']
+                        socket_io.emit('start', {'user_id': user_id, 'message': message['content']}, room=user_id)
+            else:
+                print("Didn't go into this condition")
+
+async def message_updated_event(message):
+    global host_origin
+    if host_origin == 'https://infini.getinfinichat.xyz/' in host_session_map:
+        global cursor, conn
+        print('Got a updated message: ' + message['content'], message['fingerprint']);
+        fingerprint = message['fingerprint']
+        new_message = message['content']
+        session_id = message['session_id']
+        if fingerprint in message_data:
+            global user_data_dict
+
+            if session_id in user_data_dict:
+                        # Access user-specific data
+                        user_id = user_data_dict[session_id]['user_id']
+                        user_conv_state = user_data_dict[session_id]['user_conv_state']
+                        question_answered = user_data_dict[session_id]['question_answered']
+
+                        print(f"User_ID for session {session_id} is: {user_id}")
+                        print(f"User_Conv for session {session_id} is: {user_conv_state}")
+                        print(f'QA for session {session_id} is: {question_answered}')
+                        if user_id and user_conv_state and question_answered and session_id:
+                        #if result:
+                                #user_id, session_id, question_answered, user_conversation_state = result  
+                            if user_id not in user_sid_mapping or not user_sid_mapping[user_id]:
+                                    print(f"User {user_id} is not connected. The edited message won't be emited.")
+                                    old_message = message_data[fingerprint]
+                                    # Update the message content in the dictionary
+                                    message_data[fingerprint] = new_message
+
+                                    print(old_message)
+                                    print(new_message)
+
+                                    # Update the message content in the database table
+                                    update_query = sql.SQL("UPDATE deactivated_messages SET message_content = {} WHERE user_id = {} AND message_content = {}").format(
+                                        sql.Literal(new_message),
+                                        sql.Literal(user_id),
+                                        sql.Literal(old_message)
+                                        # sql.Literal(str(fingerprint))
+                                    )
+                                    cursor.execute(update_query)
+                                    if cursor.rowcount > 0:
+                                        print(f"{cursor.rowcount} row(s) deleted.")
+                                    else:
+                                        print("No rows deleted.")
+                                        del_messages_map[user_id] = old_message
+                                        edit_messages_map[user_id] = new_message
+                                    # Commit the transaction
+                                    conn.commit()
+                                    return
+                            else:
+                                #user_id, session_id, question_answered, user_conversation_state = result  
                                 old_message = message_data[fingerprint]
-                                # Update the message content in the dictionary
                                 message_data[fingerprint] = new_message
-
-                                print(old_message)
-                                print(new_message)
-
-                                # Update the message content in the database table
-                                update_query = sql.SQL("UPDATE deactivated_messages SET message_content = {} WHERE user_id = {} AND message_content = {}").format(
-                                    sql.Literal(new_message),
-                                    sql.Literal(user_id),
-                                    sql.Literal(old_message)
-                                    # sql.Literal(str(fingerprint))
-                                )
-                                cursor.execute(update_query)
-                                if cursor.rowcount > 0:
-                                    print(f"{cursor.rowcount} row(s) deleted.")
-                                else:
-                                    print("No rows deleted.")
-                                    del_messages_map[user_id] = old_message
-                                    edit_messages_map[user_id] = new_message
-                                # Commit the transaction
-                                conn.commit()
-                                return
+                                socket_io.emit('delete_message', {'user_id': user_id, 'message': old_message}, room=user_id)
+                                print(f"Message edited. Old message: {old_message}, New message: {new_message}")
+                                socket_io.emit('start', {'user_id': user_id, 'message': new_message}, room=user_id)
                         else:
-                            #user_id, session_id, question_answered, user_conversation_state = result  
-                            old_message = message_data[fingerprint]
-                            message_data[fingerprint] = new_message
-                            socket_io.emit('delete_message', {'user_id': user_id, 'message': old_message}, room=user_id)
-                            print(f"Message edited. Old message: {old_message}, New message: {new_message}")
-                            socket_io.emit('start', {'user_id': user_id, 'message': new_message}, room=user_id)
-                    else:
-                            print(f"No message found for fingerprint: {fingerprint}")
-        else:
-            print("Didn't go into this condition")
+                                print(f"No message found for fingerprint: {fingerprint}")
+            else:
+                print("Didn't go into this condition")
 
 async def message_removed_event(message):
+    global host_origin
+    if host_origin == 'https://infini.getinfinichat.xyz/' in host_session_map:
         global cursor, conn
         session_id = message['session_id']
         fingerprint = message['fingerprint']
@@ -683,6 +692,14 @@ def send_user_message_crisp(user_id, question, session_id):
 
 @socket_io.on('send_msgs')
 def send_messages(data):
+    global host_origin
+    # Access headers using the request object
+    headers = request.headers
+    print("Request Headers:", headers)
+    host_origin_get = request.host_url
+    print('Host Origin:', host_origin_get)
+
+    # Rest of your code...
     print(str(data))
     global user_assign_data
     user_id = data.get('user_id')
@@ -690,6 +707,10 @@ def send_messages(data):
     question_answered = data.get('question_answered')
     question = data.get('question')
     session_id = data.get('session_id')
+    host = data.get('host')
+    if host_origin_get == 'https://infini.getinfinichat.xyz':
+        host_origin == host_origin_get
+        host_session_map[host_origin] = host
     print(user_id, user_conv_state, question_answered)
     
     send_user_message_crisp(user_id, question, session_id)
@@ -996,7 +1017,7 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
                     # print("USER FIRST MESSAGE IS: " + user_first_messages)
 
                 if question_answered == 'False' and user_conversation_state == '2':
-                    # await send_agent_message_crisp("Ваш запит в обробці. Це може зайняти до 1 хвилини", session_id)
+                    await send_agent_message_crisp("Ваш запит в обробці. Це може зайняти до 1 хвилини", session_id)
                     print("Emitting the updated variables")
                     if user_id in user_first_messages_mapping:
                             user_first_messages = user_first_messages_mapping[user_id]
@@ -1085,7 +1106,7 @@ async def handle_user_conversation_state_3(user_id, question_answered, user_conv
         print("The flag is not available to a current user")
         try:
             if question_answered == 'True' and user_conversation_state == '3':
-                # await send_agent_message_crisp("Ваш запит в обробці. Це може зайняти до 1 хвилини", session_id)
+                await send_agent_message_crisp("Ваш запит в обробці. Це може зайняти до 1 хвилини", session_id)
                 cached_response = await query_with_caching(question)
 
                 if cached_response:
@@ -1144,15 +1165,50 @@ async def handle_user_conversation_result(question, session_id):
                 await send_message_user_async(thread_openai_id, question_name)
                 ai_response = await retrieve_ai_response_async(thread_openai_id)
                 if ai_response:
-                        cleaned_text = re.sub('【.*?†source】', '', ai_response)
+                        print('Going to clean message')
+                        # Define patterns to be cleaned
+                        reference_pattern = '【.*?†source】'
+                        additional_pattern = '【\d+†[^】]+】'  # This pattern matches '&#8203;``【oaicite:0】``&#8203;'
+                        
+                        # Combine both patterns
+                        combined_pattern = f'{reference_pattern}|{additional_pattern}'
+                        
+                        cleaned_text = re.sub(combined_pattern, '', ai_response)
                         print(cleaned_text)
                         await send_agent_message_crisp(cleaned_text, session_id)
     except Exception as e:
         print(f"Error: {str(e)}")
         await send_agent_message_crisp("Щось пішло не так. Спробуйте пізніше.", session_id)
 
+# @app.route("/", methods=['POST', 'GET'])
+# def handle_request():
+#     global host_origin
+#     print('POST request is made')
+#     host_origin = request.host_url
+#     print('Host Origin:', host_origin)
+#     global user_assign_data
+#     data = request.json
+#     user_id = data.get('user_id')
+#     user_conv_state = data.get('user_conversation_state')
+#     question_answered = data.get('question_answered')
+#     question = data.get('question')
+#     session_id = data.get('session_id')
+#     print(user_id, user_conv_state, question_answered)
+    
+#     send_user_message_crisp(user_id, question, session_id)
+
+#     # Create or update user data in the dictionary
+#     user_data_dict[session_id] = {
+#         'user_id': data.get('user_id'),
+#         'user_conv_state': data.get('user_conversation_state'),
+#         'question_answered': data.get('question_answered')
+#     }
+
+#     return jsonify({'message': 'Request handled successfully'})
+
+
 if __name__ == "__main__":
     # loop = asyncio.new_event_loop()
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(socket_io.run(app, port=5000, debug=True))
+    loop.run_until_complete(socket_io.run(app, host='0.0.0.0', port=5000))
 
