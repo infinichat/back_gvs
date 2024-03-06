@@ -708,8 +708,8 @@ def send_messages(data):
     question = data.get('question')
     session_id = data.get('session_id')
     host = data.get('host')
-    if host_origin_get == 'https://infini.getinfinichat.xyz':
-        host_origin == host_origin_get
+    if host_origin_get == 'https://infini.getinfinichat.xyz/':
+        host_origin = host_origin_get
         host_session_map[host_origin] = host
     print(user_id, user_conv_state, question_answered)
     
