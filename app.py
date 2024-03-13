@@ -810,8 +810,10 @@ async def check_run_status_async(session, thread_openai_id, run_id):
                 print(f"Run status is {status}. Waiting for completion.")
                 await asyncio.sleep(5)  # Wait for 5 seconds before checking again
 
-
 async def retrieve_ai_response_async(thread_openai_id):
+    
+    global is_user_msgs 
+    
     api_url = f"https://api.openai.com/v1/threads/{thread_openai_id}/messages"
     print("Retrieving response")
     try:
