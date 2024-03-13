@@ -766,6 +766,10 @@ async def send_message_user_async(thread_openai_id, question):
 assistant_id = os.getenv('assistant_id')
 
 async def create_run_async(session, thread_openai_id):
+    global is_msgs_inqueue
+    if is_msgs_inqueue == True:
+        #select from db using session
+        #send_user_message()
     try:
         api_url = f"https://api.openai.com/v1/threads/{thread_openai_id}/runs"
         headers = {
@@ -811,9 +815,6 @@ async def check_run_status_async(session, thread_openai_id, run_id):
                 await asyncio.sleep(5)  # Wait for 5 seconds before checking again
 
 async def retrieve_ai_response_async(thread_openai_id):
-    
-    global is_user_msgs 
-    
     api_url = f"https://api.openai.com/v1/threads/{thread_openai_id}/messages"
     print("Retrieving response")
     try:
@@ -975,7 +976,7 @@ async def check_conversation(session_id):
 user_first_messages_mapping = {}
 
 async def execute_flow_async(message, user_id, session_id, question_answered, user_conversation_state):
-    global cursor, conn
+    global cursor, conn, is_msgs_inqueue
     global thread_openai_id
     if session_id in agent_flag_mapping and agent_flag_mapping[session_id] is True:
         print("Agent flag for the current user is: " + str(agent_flag_mapping[session_id]))
@@ -1068,6 +1069,8 @@ async def execute_flow_async(message, user_id, session_id, question_answered, us
                             return 
         except Exception as e:
             print(f"Error: {str(e)}")
+            is_msgs_inqueue = True
+            #insert into table 
             socket_io.emit('start', {'user_id': user_id, 'message': 'Щось пішло не так, спробуйте пізніше...'}, room=user_id)
 
 
